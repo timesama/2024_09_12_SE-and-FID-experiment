@@ -20,14 +20,14 @@ def calculate_amplitude(Real, Imaginary):
     Amp = np.sqrt(Real ** 2 + Imaginary ** 2)
     return Amp
 
-parent_directory = r'C:\Mega\NMR\003_Temperature\2021_09_12_SE and FId experiment\5_19'
+parent_directory = r'C:\Mega\NMR\003_Temperature\2021_09_12_SE and FId experiment\Ibuprofen\5_19'
 pattern = re.compile(r'Ibuprofen.*.dat$')
 pattern2 = re.compile(r'Empty.*.dat$')
 pattern3 = re.compile(r'Ibuprofen_\s*(\d+)_c\.dat')
 pattern_FID = re.compile(r'FID_Ib.*.dat$')
 pattern_FID_empty = re.compile(r'FID_Empty.*.dat$')
 
-# parent_directory = r'C:\Mega\NMR\003_Temperature\2021_09_12_SE and FID experiment\cellulose\200 scans'
+# parent_directory = r'C:\Mega\NMR\003_Temperature\2021_09_12_SE and FId experiment\Сellulose\200 scans'
 # pattern = re.compile(r'Cellulose.*.dat$')
 # pattern2 = re.compile(r'Empty.*.dat$')
 # pattern3 = re.compile(r'Cellulose_\s*(\d+)_c\.dat')
