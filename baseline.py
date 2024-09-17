@@ -117,11 +117,14 @@ for (filename1, filename2) in zip(measurement_files, baseline):
 
 # Extrapolating to the time zero to find the true amplitude of the FID or so
 # Gaus fittin in the whole range
-p1 = [55, 18]
-popt1, _= curve_fit(gauss1, echo_time, maximum, p0 = p1)
-extrapolation = popt1[0]
+p1 = [55,0, 18]
+popt1, _= curve_fit(gauss, echo_time, maximum, p0 = p1)
+# extrapolation = popt1[0]
 echo_time_fit = np.arange(0,19,0.001)
-fitting_line = gauss1(echo_time_fit, *popt1)
+fitting_line = gauss(echo_time_fit, *popt1)
+
+# The maximum SE is at time = 0, not the coefficient
+extrapolation = fitting_line[0]
 
 # Linear fitting in the linear range
 # fitting = np.polyfit(echo_time[0:4], maximum[0:4], 1)
@@ -178,6 +181,9 @@ plt.show()
 
 print(r'Maximum amplitude from SE ', popt1[0])
 print(r'Maximum amplitude from FID ', popt[0])
+
+print(r'Popt from SE ', popt1)
+print(r'Popt from FID ', popt)
 
 print('donedone')    
 print('done')
