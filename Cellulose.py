@@ -95,161 +95,6 @@ def read_data(file_path):
 def calculate_amplitude(real, imaginary):
     return np.sqrt(real**2 + imaginary**2)
 
-# Directory and pattern setup
-parent_directory = os.path.join(os.getcwd(), 'SE_Cycle')
-pattern = re.compile(r'Cellulose.*.dat$')
-pattern2 = re.compile(r'Empty.*.dat$')
-pattern3 = re.compile(r'Cellulose.*_\s*(\d+)_c\.dat')
-pattern_FID = re.compile(r'FID_C.*.dat$')
-pattern_FID_empty = re.compile(r'FID_Empty.*.dat$')
-pattern_FID_water = re.compile(r'FID_Water.*.dat$')
-pattern_MSE = re.compile(r'MSE.*.dat$')
-
-measurement_files = {}
-baseline = {}
-
-# FID part
-for filename in os.listdir(parent_directory):
-    if pattern_FID.match(filename):
-        file_path_f = os.path.join(parent_directory, filename)
-        Time, Re_original, Im_original = read_data(file_path_f)
-        #Correct phase
-        R_phased, I_phased = time_domain_phase(Re_original, Im_original)
-        #Adjust frequency
-        Frequency = calculate_frequency_scale(Time)
-        Re_f, Im_f = adjust_frequency(Frequency, R_phased, I_phased)
-        Time_f = Time
-        Amp_f = calculate_amplitude(Re_f, Im_f)
-
-    elif pattern_MSE.match(filename):
-        file_path_mse = os.path.join(parent_directory, filename)
-        Time, Re_original, Im_original = read_data(file_path_mse)
-        #Correct phase
-        R_phased, I_phased = time_domain_phase(Re_original, Im_original)
-        #Adjust frequency
-        Frequency = calculate_frequency_scale(Time)
-        Re_mse, Im_mse = adjust_frequency(Frequency, R_phased, I_phased)
-        Time_mse = Time
-        Amp_mse = calculate_amplitude(Re_mse, Im_mse)
-
-    elif pattern_FID_empty.match(filename):
-        file_path_fe = os.path.join(parent_directory, filename)
-        Time, Re_original, Im_original = read_data(file_path_fe)
-        #Correct phase
-        R_phased, I_phased = time_domain_phase(Re_original, Im_original)
-        #Adjust frequency
-        Frequency = calculate_frequency_scale(Time)
-        Re_fe, Im_fe = adjust_frequency(Frequency, R_phased, I_phased)
-        Time_fe = Time
-        Amp_fe = calculate_amplitude(Re_fe, Im_fe)
-        
-    elif pattern_FID_water.match(filename):
-        file_path_w = os.path.join(parent_directory, filename)
-        Time, Re_original, Im_original = read_data(file_path_w)
-        #Correct phase
-        R_phased, I_phased = time_domain_phase(Re_original, Im_original)
-        #Adjust frequency
-        Frequency = calculate_frequency_scale(Time)
-        Re_w, Im_w = adjust_frequency(Frequency, R_phased, I_phased)
-        Time_w = Time
-        Amp_wa = calculate_amplitude(Re_w, Im_w)
-
-# FID
-Amp_w   = Amp_wa[:220] - Amp_fe
-Time_w  = Time_w[:220]
-Amp_FID = Amp_f - Amp_fe
-
-Time_FID_plot = Time_f[np.argmax(Amp_FID):]
-Amp_FID_plot = Amp_FID[np.argmax(Amp_FID):]
-
-# MSE
-Amp_MSE = Amp_mse[:220] - Amp_fe
-Time_MSE = Time_mse
-Time_mse = Time_mse[:220]
-
-Time_mse = Time_mse[np.argmax(Amp_MSE):]
-Amp_MSE = Amp_MSE[np.argmax(Amp_MSE):]
-
-# SE part
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
-
-for filename in os.listdir(parent_directory):
-    if pattern.match(filename):
-        file_path = os.path.join(parent_directory, filename)
-        Time, Re, Im = read_data(file_path)
-        Amp = calculate_amplitude(Re, Im)
-        measurement_files[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
-    elif pattern2.match(filename):
-        file_path = os.path.join(parent_directory, filename)
-        Time, Re, Im = read_data(file_path)
-        Amp = calculate_amplitude(Re, Im)
-        baseline[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
-
-# Processing SE data
-time_shift = 0
-echo_time = np.arange(9, 26)
-maximum = []
-cmap = plt.get_cmap('winter')
-num_files = len(measurement_files)
-
-# SE for plot data
-Time_plot = np.array(measurement_files['Cellulose_500scnas_12gain_ 9_c.dat']['Time'])
-Amp_plot = np.array(measurement_files['Cellulose_500scnas_12gain_ 9_c.dat']['Amp']) - np.array(baseline['Empty_500scnas_12gain_ 9_c.dat']['Amp'])
-Time_plot = Time_plot[np.argmax(Amp_plot):]
-Amp_plot = Amp_plot[np.argmax(Amp_plot):]
-
-for filename1, filename2 in zip(measurement_files, baseline):
-    amp_measurement_files = np.array(measurement_files[filename1]['Amp'])
-    amp_baseline = np.array(baseline[filename2]['Amp'])
-
-    if len(amp_measurement_files) != len(amp_baseline):
-        amp_baseline = amp_baseline[:len(amp_measurement_files)]
-
-    amp_difference = amp_measurement_files - amp_baseline
-    measurement_files[filename1]['Amp_diff'] = amp_difference
-    maximum.append(max(amp_difference))
-
-    idx_cut_max = np.argmax(amp_difference)
-    match = pattern3.search(filename1)
-    file_key = match.group(1)
-
-    shifted_time = np.array(measurement_files[filename1]['Time'])
-    shifted_time = shifted_time[idx_cut_max:]
-    amp_difference = amp_difference[idx_cut_max:]
-    color = cmap(time_shift / num_files)
-    time_shift += 1
-
-    if filename1 == 'Cellulose_500scnas_12gain_ 9_c.dat':
-        Time_SE = np.array(measurement_files[filename1]['Time'])
-        Real_SE = np.array(measurement_files[filename1]['Re'])
-        Imag_SE = np.array(measurement_files[filename1]['Im'])
-
-    ax1.plot(shifted_time, amp_difference, label=file_key, color=color)
-
-ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID')
-ax1.set_xlim(-5, 80)
-ax1.legend(title="Echo time in μs")
-ax1.set_title('a)', loc='left')
-ax1.set_xlabel('Time, μs')
-ax1.set_ylabel('Amplitude')
-
-# Gaussian fit for SE maximum amplitude
-p1 = [10, 6] # Initial guess
-popt1, _ = curve_fit(gauss1, echo_time, maximum, p0=p1)
-echo_time_fit = np.arange(0, 25, 0.001)
-fitting_line = gauss1(echo_time_fit, *popt1)
-extrapolation = fitting_line[0]
-
-ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
-ax2.plot(echo_time_fit, fitting_line, 'r--', label='Gaussian Fit')
-ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
-ax2.set_xlabel('Echo time, μs')
-ax2.set_ylabel('Amplitude max')
-ax2.set_title('b)', loc='left')
-plt.tight_layout()
-plt.show()
-
-# comparison of FID, SE and MSE
 def frequency_domain_analysis(FFT, Frequency):
 
     # 8. Simple baseline
@@ -303,10 +148,10 @@ def simple_baseline_correction(FFT):
     return Amp, Re, Im
 
 def calculate_apodization(Real, Freq):
-    # Find sigma at 2% from the max amplitude of the spectra
+    # Find sigma at 10% from the max amplitude of the spectra
     Maximum = np.max(np.abs(Real))
     idx_max = np.argmax(np.abs(Real))
-    ten_percent = Maximum * 0.02
+    ten_percent = Maximum * 0.1
 
     b = np.argmin(np.abs(Real[idx_max:] - ten_percent))
     sigma_ap = Freq[idx_max + b]
@@ -377,8 +222,8 @@ def create_spectrum(Time, Real, Imaginary):
     Re_ap, Im_ap = apodization(Time, Real, Imaginary)
     Fr = calculate_frequency_scale(Time)
 
-    # Re_ph, Im_ph = time_domain_phase(Re_ap, Im_ap)
-    Re_ad, Im_ad = adjust_frequency(Fr, Re_ap, Im_ap)
+    Re_ph, Im_ph = time_domain_phase(Re_ap, Im_ap)
+    Re_ad, Im_ad = adjust_frequency(Fr, Re_ph, Im_ph)
     
     # 6. Add zeros
     Time_zero, Fid_zero = add_zeros(Time, Re_ad, Im_ad, number_of_points)
@@ -402,10 +247,190 @@ def adjust_spectrum (Time, Re, Im):
     Frequency_shifted = Frequency - shift
     return Frequency_shifted, Real
 
-Fr_FID, Re_FID = adjust_spectrum(Time_f, Re_f, Im_f)
-Fr_SE, Re_SE = adjust_spectrum(Time_SE, Real_SE, Imag_SE)
-Fr_MSE, Re_MSE = adjust_spectrum(Time_MSE, Re_mse, Im_mse)
+def prepare_data(parent_directory, filename, correction):
+        file_path = os.path.join(parent_directory, filename)
+        Time, Re_original, Im_original = read_data(file_path)
 
+        if correction == True:
+            Frequency = calculate_frequency_scale(Time)
+            #Correct phase
+            R_phased, I_phased = time_domain_phase(Re_original, Im_original)
+            #Adjust frequency
+            Re, Im = adjust_frequency(Frequency, R_phased, I_phased)
+            Amp = calculate_amplitude(Re, Im)
+
+            # For debug
+            # plt.plot(Time, Re_original, 'k--', label='Re original')
+            # plt.plot(Time, Im_original, 'b--', label='Im original')
+            # plt.plot(Time, R_phased, 'k.', label='Re phased')
+            # plt.plot(Time, I_phased, 'b.', label='Im phased')
+            # plt.plot(Time, Re, 'k', label='Re fr')
+            # plt.plot(Time, Im, 'b', label='Im fr')
+            # plt.plot(Time, Amp, 'r', label='Amp')
+            # plt.xlim([-5,80])
+            # plt.xlabel('Time, μs')
+            # plt.ylabel('Amplitude, a.u.')
+            # plt.legend()
+            # plt.title(filename)
+            # plt.tight_layout()
+            # plt.show()
+
+        else:
+            Re = Re_original
+            Im = Im_original
+            Amp = calculate_amplitude(Re_original, Im_original)
+
+        return Time, Re, Im, Amp
+
+def cut_beginning(Time, Data):
+    Time_plot = Time[np.argmax(Data):]
+    Data_plot = Data[np.argmax(Data):]
+    return Time_plot, Data_plot
+
+def read_files_disctionary_se(measurement_files, baseline, filename1, filename2, type, type_save):
+    # read data
+    Time = np.array(measurement_files[filename1]['Time'])
+    data_measurement_files = np.array(measurement_files[filename1][type])
+    data_baseline = np.array(baseline[filename2][type])
+    # compare length
+    if len(data_measurement_files) != len(amp_baseline):
+        amp_baseline = amp_baseline[:len(data_measurement_files)]
+    # subtract
+    difference = data_measurement_files - data_baseline
+    # save subtracted data and maximum
+    measurement_files[filename1][type_save] = difference
+    maximum.append(max(difference))
+    Time_cut, Data_cut = cut_beginning(Time, difference)
+
+    return maximum, Time_cut, Data_cut
+
+def normalize_to_fid(Fid, Data, Time_fid, Time_data):
+    Mean_amp_fid_long = np.mean(Fid[find_nearest(Time_fid, 60):find_nearest(Time_fid, 70)])
+    Mean_amp_dat_long = np.mean(Data[find_nearest(Time_data, 60):find_nearest(Time_data, 70)])
+
+    difference = Mean_amp_dat_long-Mean_amp_fid_long
+    Normalized_amp = Data -difference
+
+    # the division doesn't work very good
+    # proportionality_coefficient = Mean_amp_fid_long /Mean_amp_dat_long
+    # Normalized_amp = Data * proportionality_coefficient
+    return Normalized_amp
+
+# Directory and pattern setup
+parent_directory = os.path.join(os.getcwd(), 'SE_Cycle')
+pattern = re.compile(r'Cellulose.*.dat$')
+pattern2 = re.compile(r'Empty.*.dat$')
+pattern3 = re.compile(r'Cellulose.*_\s*(\d+)_c\.dat')
+pattern_FID = re.compile(r'FID_C.*.dat$')
+pattern_FID_empty = re.compile(r'FID_Empty.*.dat$')
+pattern_FID_water = re.compile(r'FID_Water.*.dat$')
+pattern_MSE = re.compile(r'MSE.*.dat$')
+
+measurement_files = {}
+baseline = {}
+maximum = []
+time_shift = 0
+
+echo_time = np.arange(9, 26)
+echo_time_fit = np.arange(0, 25, 0.001)
+
+#### Read and prepare data
+# FID, MSE, Empty, Water part, SE
+for filename in os.listdir(parent_directory):
+
+    # FID
+    if pattern_FID.match(filename):
+        correction = False
+        Time_fid, Re_td_fid, Im_td_fid, Amp_td_fid = prepare_data(parent_directory, filename, correction)
+
+    # MSE
+    elif pattern_MSE.match(filename):
+        correction = True
+        Time_mse, Re_td_mse, Im_td_mse, Amp_td_mse = prepare_data(parent_directory, filename, correction)
+        # UNFORTUNATELY I recorded a very long MSE, my bad
+        length_to_cut = len(Time_fid)
+        Time_mse      = Time_mse[:length_to_cut]
+        Re_td_mse     = Re_td_mse[:length_to_cut]
+        Im_td_mse     = Im_td_mse[:length_to_cut]
+        Amp_td_mse    = Amp_td_mse[:length_to_cut]
+
+    # Empty
+    elif pattern_FID_empty.match(filename):
+        correction = False
+        Time_fid_empty, Re_td_fid_empty, Im_td_fid_empty, Amp_td_fid_empty = prepare_data(parent_directory, filename, correction)
+    
+    # Water
+    elif pattern_FID_water.match(filename):
+        correction = True
+        Time_water, Re_td_water, Im_td_water, Amp_td_water = prepare_data(parent_directory, filename, correction)
+        # UNFORTUNATELY I recorded a very long FID for water, my bad
+        length_to_cut = len(Time_fid)
+        Time_water      = Time_water[:length_to_cut]
+        Re_td_water     = Re_td_water[:length_to_cut]
+        Im_td_water     = Im_td_water[:length_to_cut]
+        Amp_td_water    = Amp_td_water[:length_to_cut]
+
+    # SE
+    elif pattern.match(filename):
+        correction = False
+        Time, Re, Im, Amp = prepare_data(parent_directory, filename, correction)
+        measurement_files[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
+
+    # SE empty
+    elif pattern2.match(filename):
+        Time, Re, Im, Amp = prepare_data(parent_directory, filename, correction)
+        baseline[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
+
+# Subtract empty from FID cellulose, FID water and MSE for AMPLITUDES
+Amp_td_fid_sub      = Amp_td_fid - Amp_td_fid_empty
+Amp_td_water_sub    = Amp_td_water - Amp_td_fid_empty
+Amp_td_mse_sub      = Amp_td_mse - Amp_td_fid_empty
+
+# Subtract empty from FID cellulose, FID water and MSE for REAL && IMAG
+Re_td_fid_sub      = Re_td_fid - Re_td_fid_empty
+Re_td_water_sub    = Re_td_water - Re_td_fid_empty
+Re_td_mse_sub      = Re_td_mse - Re_td_fid_empty
+
+Im_td_fid_sub      = Im_td_fid - Im_td_fid_empty
+Im_td_water_sub    = Im_td_water - Im_td_fid_empty
+Im_td_mse_sub      = Im_td_mse - Im_td_fid_empty
+
+# Subtract empty from SE & cut the beginning for AMPLITUDES 
+filename_for_plot_se = 'Cellulose_500scnas_12gain_ 9_c.dat'
+filename_for_plot_empty = 'Empty_500scnas_12gain_ 9_c.dat'
+Amp_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Amp']) - np.array(baseline[filename_for_plot_empty]['Amp'])
+Time_se = np.array(measurement_files[filename_for_plot_se]['Time'])
+
+
+# Subtract empty from SE & cut the beginning for Real
+Re_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Re']) - np.array(baseline[filename_for_plot_empty]['Re'])
+Im_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Im']) - np.array(baseline[filename_for_plot_empty]['Im'])
+
+
+# Normalize amplitudes of SE and MSE to FID's 60-70 microsec
+Amp_se_td_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_se_sub, Time_fid, Time_se)
+Amp_mse_td_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_mse_sub, Time_fid, Time_mse)
+
+Re_se_td_norm = normalize_to_fid(Re_td_fid_sub, Re_td_se_sub, Time_fid, Time_se)
+Re_mse_td_norm = normalize_to_fid(Re_td_fid_sub, Re_td_mse_sub, Time_fid, Time_mse)
+Im_se_td_norm = normalize_to_fid(Im_td_fid_sub, Im_td_se_sub, Time_fid, Time_se)
+Im_mse_td_norm = normalize_to_fid(Im_td_fid_sub, Im_td_mse_sub, Time_fid, Time_mse)
+
+# Cut the beginning for amplitudes and real for FID and MSE
+Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_td_fid_sub)
+_, Re_FID_plot = cut_beginning(Time_fid, Re_td_fid_sub)
+
+Time_MSE_plot, Amp_MSE_plot = cut_beginning(Time_mse, Amp_mse_td_norm)
+Time_MSE_plot_Re, Re_MSE_plot = cut_beginning(Time_mse, Re_mse_td_norm)
+
+Time_SE_plot, Amp_SE_plot = cut_beginning(Time_se, Amp_se_td_norm)
+Time_SE_plot_Re, Re_SE_plot = cut_beginning(Time_se, Re_se_td_norm)
+
+## PLOT FID, SE and MSE all together
+# comparison of FID, SE and MSE
+Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_td_fid_sub, Im_td_fid_sub)
+Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_se_td_norm, Im_se_td_norm)
+Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_mse_td_norm, Im_mse_td_norm)
 
 # 10. M2 & T2
 M2_FID, T2_FID = calculate_M2(Re_FID, Fr_FID)
@@ -415,11 +440,11 @@ print(f'SE\nM2: {M2_FID}\nT2: {T2_FID}')
 M2_FID, T2_FID = calculate_M2(Re_MSE, Fr_MSE)
 print(f'MSE\nM2: {M2_FID}\nT2: {T2_FID}')
 
-#plot FID, MSE and SE
+#plot FID, MSE and SE AMPLITUDES
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
 ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID')
-ax1.plot(Time_mse, Amp_MSE, 'k', label='MSE')
-ax1.plot(Time_plot, Amp_plot, 'b', label='SE')
+ax1.plot(Time_MSE_plot, Amp_MSE_plot, 'k', label='MSE')
+ax1.plot(Time_SE_plot, Amp_SE_plot, 'b', label='SE')
 ax1.set_xlim(-5, 80)
 ax1.set_title('a)', loc='left')
 ax1.set_xlabel('Time, μs')
@@ -434,6 +459,74 @@ ax2.set_xlabel('Frequenct, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 plt.tight_layout()
 plt.show()
+
+
+#plot FID, MSE and SE REAL
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+ax1.plot(Time_FID_plot, Re_FID_plot, 'r', label='FID')
+ax1.plot(Time_MSE_plot_Re, Re_MSE_plot, 'k', label='MSE')
+ax1.plot(Time_SE_plot_Re, Re_SE_plot, 'b', label='SE')
+ax1.set_xlim(-5, 80)
+ax1.set_title('a)', loc='left')
+ax1.set_xlabel('Time, μs')
+ax1.set_ylabel('Amplitude, a.u.')
+ax1.legend()
+
+ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
+ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
+ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
+ax2.set_xlim(-0.07,0.070)
+ax2.set_title('b)', loc='left')
+ax2.set_xlabel('Frequenct, MHz')
+ax2.set_ylabel('Intensity, a.u.')
+ax2.legend()
+plt.tight_layout()
+plt.show()
+
+
+# SE part
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
+
+# Processing SE data
+cmap = plt.get_cmap('winter')
+num_files = len(measurement_files)
+
+# Amplitudes SE
+for filename1, filename2 in zip(measurement_files, baseline):
+    maximum, Time_cut, Amp_cut = read_files_disctionary_se(measurement_files, baseline, filename1, filename2, 'Amp', 'Amp_diff')
+
+    color = cmap(time_shift / num_files)
+    time_shift += 1
+
+    # Define label for legend
+    match = pattern3.search(filename1)
+    file_key = match.group(1)
+
+    ax1.plot(Time_cut, Amp_cut, label=file_key, color=color)
+
+ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID')
+ax1.set_xlim(-5, 80)
+ax1.legend(title="Echo time in μs")
+ax1.set_title('a)', loc='left')
+ax1.set_xlabel('Time, μs')
+ax1.set_ylabel('Amplitude')
+
+# Gaussian fit for SE maximum amplitude
+p1 = [10, 6] # Initial guess
+popt1, _ = curve_fit(gauss1, echo_time, maximum, p0=p1)
+fitting_line = gauss1(echo_time_fit, *popt1)
+extrapolation = fitting_line[0]
+
+ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
+ax2.plot(echo_time_fit, fitting_line, 'r--', label='Gaussian Fit')
+ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
+ax2.set_xlabel('Echo time, μs')
+ax2.set_ylabel('Amplitude max')
+ax2.set_title('b)', loc='left')
+plt.tight_layout()
+plt.show()
+
+
 
 # Normalize FID to the amplitude SE at t=0
 time_shift = 0
@@ -518,7 +611,6 @@ Amp_build_full = np.concatenate((Amp_build_from_zero, Amp_build_end))
 
 # Build-up the FID from MSE
 # FID fitting and building
-
 A_mse = np.max(Amp_MSE)
 popt2, _ = curve_fit(gauss2(A_mse), Time_cut, Amp_cut, p0=[8])
 A_built = gauss1(Time_f, A_mse, popt2[0])
@@ -594,6 +686,7 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
+# Constants
 mass_water = 0.0963
 mass_cellu = 0.1334
 Avogadro_number= 6.022*(10**23)
@@ -606,19 +699,12 @@ protons_cellu = (mass_cellu/molar_mass_cellu)*Avogadro_number*10
 proton_density_water = Amp_water/protons_water
 proton_density_cellu = Amp_cellu/protons_cellu
 
-AA = protons_water/protons_cellu
-BB = Amp_water/Amp_cellu
-
 Amp_cellu_from_protondensity_water = proton_density_water*protons_cellu
 
 # Print results
-# print(f'protons ratio {AA}')
-# print(f'amp ratio {BB}')
 print(f'The amplitude of cellulose calculated from water is {Amp_cellu_from_protondensity_water}')
 
 print(f'Maximum amplitude from SE: {popt1[0]}')
 print(f'Maximum amplitude from MSE: {np.max(Amp_MSE)}')
 print(f'Maximum amplitude from FID: {popt[0]}')
-# print(f'Popt from SE: {popt1}')
-# print(f'Popt from FID: {popt}')
 print('done')
