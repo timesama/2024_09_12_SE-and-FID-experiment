@@ -152,10 +152,10 @@ def simple_baseline_correction(FFT):
     return Amp, Re, Im
 
 def calculate_apodization(Real, Freq):
-    # Find sigma at 10% from the max amplitude of the spectra
+    # Find sigma at 0.1% from the max amplitude of the spectra
     Maximum = np.max(np.abs(Real))
     idx_max = np.argmax(np.abs(Real))
-    ten_percent = Maximum * 0.1
+    ten_percent = Maximum * 0.001
 
     b = np.argmin(np.abs(Real[idx_max:] - ten_percent))
     sigma_ap = Freq[idx_max + b]
@@ -196,13 +196,14 @@ def add_zeros(Time, Real, Imaginary, number_of_points):
 
 def apodization(Time, Real, Imaginary):
     Amplitude = calculate_amplitude(Real, Imaginary)
-    coeffs = np.polyfit(Time, Amplitude, 1)  # Fit an exponential decay function
-    c = np.polyval(coeffs, Time)
-    d = np.argmin(np.abs(c - 3e-5))
-    sigma = Time[d]
-    if sigma == 0:
-        sigma = 1000
-    apodization_function = np.exp(-(Time / sigma) ** 4)
+    sigma = 70
+    # coeffs = np.polyfit(Time, Amplitude, 1)  # Fit an exponential decay function
+    # c = np.polyval(coeffs, Time)
+    # d = np.argmin(np.abs(c - 3e-5))
+    # sigma = Time[d]
+    # if sigma == 0:
+    #     sigma = 1000
+    apodization_function = np.exp(-(Time / sigma) ** 6)
     Re_ap = Real * apodization_function
     Im_ap = Imaginary * apodization_function
 
@@ -247,9 +248,9 @@ def create_spectrum(Time, Real, Imaginary):
 
 def adjust_spectrum (Time, Re, Im):
     Frequency, Real, _ = create_spectrum(Time, Re, Im)
-    shift = Frequency[np.argmax(Real)]
-    Frequency_shifted = Frequency - shift
-    return Frequency_shifted, Real
+    # shift = Frequency[np.argmax(Real)]
+    # Frequency = Frequency - shift
+    return Frequency, Real
 
 def prepare_data(parent_directory, filename, correction):
         file_path = os.path.join(parent_directory, filename)
@@ -320,18 +321,17 @@ def normalize_to_fid(Fid, Data, Time_fid, Time_data):
     # Normalized_amp = Data * proportionality_coefficient
     return Normalized_amp
 
-def reference_long_component(Time, Component_n):
+def reference_long_component(Time, Component_n, end):
     # 3. Cut the ranges for fitting
-    minimum = find_nearest(Time, 55)
-    maximum = find_nearest(Time, 100)
+    minimum = find_nearest(Time, end)
 
-    Time_range = Time[minimum:maximum]
-    Component_n_range = Component_n[minimum:maximum]
+    Time_range = Time[minimum:]
+    Component_n_range = Component_n[minimum:]
 
     # Smooth data
-    Smooth = savgol_filter(Component_n_range, 5, 2)
+    Smooth = savgol_filter(Component_n_range, 30, 0)
 
-    p = [1.5, 50, 0.2]
+    p = [5, 30, 0.5]
     # 7. Fit data to exponential decay
     popt, _      = curve_fit(decaying_exponential, Time_range, Smooth, p0 =p)
     
@@ -444,27 +444,27 @@ Re_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Re']) - np.arra
 Im_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Im']) - np.array(baseline[filename_for_plot_empty]['Im'])
 
 # Normalize amplitudes of SE and MSE to FID's 60-70 microsec
-Amp_se_td_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_se_sub, Time_fid, Time_se)
-Amp_mse_td_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_mse_sub, Time_fid, Time_mse)
+Amp_td_se_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_se_sub, Time_fid, Time_se)
+Amp_td_mse_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_mse_sub, Time_fid, Time_mse)
 
-Re_se_td_norm = normalize_to_fid(Re_td_fid_sub, Re_td_se_sub, Time_fid, Time_se)
-Re_mse_td_norm = normalize_to_fid(Re_td_fid_sub, Re_td_mse_sub, Time_fid, Time_mse)
-Im_se_td_norm = normalize_to_fid(Im_td_fid_sub, Im_td_se_sub, Time_fid, Time_se)
-Im_mse_td_norm = normalize_to_fid(Im_td_fid_sub, Im_td_mse_sub, Time_fid, Time_mse)
+Re_td_se_norm = normalize_to_fid(Re_td_fid_sub, Re_td_se_sub, Time_fid, Time_se)
+Re_td_mse_norm = normalize_to_fid(Re_td_fid_sub, Re_td_mse_sub, Time_fid, Time_mse)
+Im_td_se_norm = normalize_to_fid(Im_td_fid_sub, Im_td_se_sub, Time_fid, Time_se)
+Im_td_mse_norm = normalize_to_fid(Im_td_fid_sub, Im_td_mse_sub, Time_fid, Time_mse)
 
 # Subtract the long component for FID, SE and MSE AMplitudese
-Amp_fid_td_short    = reference_long_component(Time_fid, Amp_td_fid_sub)
-Amp_mse_td_short    = reference_long_component(Time_mse, Amp_mse_td_norm)
-Amp_se_td_short     = reference_long_component(Time_se, Amp_se_td_norm)
+Amp_fid_td_short    = reference_long_component(Time_fid, Amp_td_fid_sub, end= 50)
+Amp_mse_td_short    = reference_long_component(Time_mse, Amp_td_mse_norm, end= 50)
+Amp_se_td_short     = reference_long_component(Time_se, Amp_td_se_norm, end= 80)
 
 # Subtract the long component for FID, SE and MSE REAL & IMAG
-Re_fid_td_short    = reference_long_component(Time_fid, Re_td_fid_sub)
-Re_mse_td_short    = reference_long_component(Time_mse, Re_mse_td_norm)
-Re_se_td_short     = reference_long_component(Time_se, Re_se_td_norm)
+Re_fid_td_short    = reference_long_component(Time_fid, Re_td_fid_sub, end= 50)
+Re_mse_td_short    = reference_long_component(Time_mse, Re_td_mse_norm, end= 50)
+Re_se_td_short     = reference_long_component(Time_se, Re_td_se_norm, end= 80)
 
-Im_fid_td_short    = reference_long_component(Time_fid, Im_td_fid_sub)
-Im_mse_td_short    = reference_long_component(Time_mse, Im_mse_td_norm)
-Im_se_td_short     = reference_long_component(Time_se, Im_se_td_norm)
+# Im_fid_td_short    = reference_long_component(Time_fid, Im_td_fid_sub)
+# Im_mse_td_short    = reference_long_component(Time_mse, Im_td_mse_norm)
+# Im_se_td_short     = reference_long_component(Time_se, Im_td_se_norm)
 
 # Cut the beginning for amplitudes and real for FID and MSE
 Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_fid_td_short)
