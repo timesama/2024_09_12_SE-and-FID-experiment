@@ -1,6 +1,7 @@
 # This Python file uses the following encoding: utf-8
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 import os, re
 
@@ -85,6 +86,9 @@ def gauss2(A_const):
     def gauss_const(x, sigma):
         return gauss1(x, A_const, sigma)
     return gauss_const
+
+def decaying_exponential(x, a, b, c):
+    return a * np.exp(-x/b) + c
 
 # Read data from file
 def read_data(file_path):
@@ -287,7 +291,7 @@ def cut_beginning(Time, Data):
     Data_plot = Data[np.argmax(Data):]
     return Time_plot, Data_plot
 
-def read_files_disctionary_se(measurement_files, baseline, filename1, filename2, type, type_save):
+def analysis_SE(measurement_files, baseline, filename1, filename2, type, type_save):
     # read data
     Time = np.array(measurement_files[filename1]['Time'])
     data_measurement_files = np.array(measurement_files[filename1][type])
@@ -315,6 +319,40 @@ def normalize_to_fid(Fid, Data, Time_fid, Time_data):
     # proportionality_coefficient = Mean_amp_fid_long /Mean_amp_dat_long
     # Normalized_amp = Data * proportionality_coefficient
     return Normalized_amp
+
+def reference_long_component(Time, Component_n):
+    # 3. Cut the ranges for fitting
+    minimum = find_nearest(Time, 55)
+    maximum = find_nearest(Time, 100)
+
+    Time_range = Time[minimum:maximum]
+    Component_n_range = Component_n[minimum:maximum]
+
+    # Smooth data
+    Smooth = savgol_filter(Component_n_range, 5, 2)
+
+    p = [1.5, 50, 0.2]
+    # 7. Fit data to exponential decay
+    popt, _      = curve_fit(decaying_exponential, Time_range, Smooth, p0 =p)
+    
+    # 9. Calculate the curves fitted to data within the desired range
+    Component_f = decaying_exponential(Time, *popt)
+
+    # 10. Subtract
+    Component_sub = Component_n - Component_f
+
+
+    # For Debug
+    plt.plot(Time, Component_n, 'r', label='Original')
+    plt.plot(Time, Component_sub, 'b', label='Subtracted')
+    plt.plot(Time, Component_f, 'k--', label='Fitted')
+    plt.xlabel('Time, μs')
+    plt.ylabel('Amplitude, a.u.')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    return Component_sub
 
 # Directory and pattern setup
 parent_directory = os.path.join(os.getcwd(), 'SE_Cycle')
@@ -401,11 +439,9 @@ filename_for_plot_empty = 'Empty_500scnas_12gain_ 9_c.dat'
 Amp_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Amp']) - np.array(baseline[filename_for_plot_empty]['Amp'])
 Time_se = np.array(measurement_files[filename_for_plot_se]['Time'])
 
-
 # Subtract empty from SE & cut the beginning for Real
 Re_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Re']) - np.array(baseline[filename_for_plot_empty]['Re'])
 Im_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Im']) - np.array(baseline[filename_for_plot_empty]['Im'])
-
 
 # Normalize amplitudes of SE and MSE to FID's 60-70 microsec
 Amp_se_td_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_se_sub, Time_fid, Time_se)
@@ -416,21 +452,35 @@ Re_mse_td_norm = normalize_to_fid(Re_td_fid_sub, Re_td_mse_sub, Time_fid, Time_m
 Im_se_td_norm = normalize_to_fid(Im_td_fid_sub, Im_td_se_sub, Time_fid, Time_se)
 Im_mse_td_norm = normalize_to_fid(Im_td_fid_sub, Im_td_mse_sub, Time_fid, Time_mse)
 
+# Subtract the long component for FID, SE and MSE AMplitudese
+Amp_fid_td_short    = reference_long_component(Time_fid, Amp_td_fid_sub)
+Amp_mse_td_short    = reference_long_component(Time_mse, Amp_mse_td_norm)
+Amp_se_td_short     = reference_long_component(Time_se, Amp_se_td_norm)
+
+# Subtract the long component for FID, SE and MSE REAL & IMAG
+Re_fid_td_short    = reference_long_component(Time_fid, Re_td_fid_sub)
+Re_mse_td_short    = reference_long_component(Time_mse, Re_mse_td_norm)
+Re_se_td_short     = reference_long_component(Time_se, Re_se_td_norm)
+
+Im_fid_td_short    = reference_long_component(Time_fid, Im_td_fid_sub)
+Im_mse_td_short    = reference_long_component(Time_mse, Im_mse_td_norm)
+Im_se_td_short     = reference_long_component(Time_se, Im_se_td_norm)
+
 # Cut the beginning for amplitudes and real for FID and MSE
-Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_td_fid_sub)
-_, Re_FID_plot = cut_beginning(Time_fid, Re_td_fid_sub)
+Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_fid_td_short)
+_, Re_FID_plot = cut_beginning(Time_fid, Re_fid_td_short)
 
-Time_MSE_plot, Amp_MSE_plot = cut_beginning(Time_mse, Amp_mse_td_norm)
-Time_MSE_plot_Re, Re_MSE_plot = cut_beginning(Time_mse, Re_mse_td_norm)
+Time_MSE_plot, Amp_MSE_plot = cut_beginning(Time_mse, Amp_mse_td_short)
+Time_MSE_plot_Re, Re_MSE_plot = cut_beginning(Time_mse, Re_mse_td_short)
 
-Time_SE_plot, Amp_SE_plot = cut_beginning(Time_se, Amp_se_td_norm)
-Time_SE_plot_Re, Re_SE_plot = cut_beginning(Time_se, Re_se_td_norm)
+Time_SE_plot, Amp_SE_plot = cut_beginning(Time_se, Amp_se_td_short)
+Time_SE_plot_Re, Re_SE_plot = cut_beginning(Time_se, Re_se_td_short)
 
 ## PLOT FID, SE and MSE all together
 # comparison of FID, SE and MSE
-Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_td_fid_sub, Im_td_fid_sub)
-Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_se_td_norm, Im_se_td_norm)
-Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_mse_td_norm, Im_mse_td_norm)
+Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_fid_td_short, 0)
+Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_se_td_short, 0)
+Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_mse_td_short , 0)
 
 # 10. M2 & T2
 M2_FID, T2_FID = calculate_M2(Re_FID, Fr_FID)
@@ -455,11 +505,10 @@ ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
 ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
 ax2.set_xlim(-0.07,0.070)
 ax2.set_title('b)', loc='left')
-ax2.set_xlabel('Frequenct, MHz')
+ax2.set_xlabel('Frequency, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 plt.tight_layout()
 plt.show()
-
 
 #plot FID, MSE and SE REAL
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
@@ -477,7 +526,7 @@ ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
 ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
 ax2.set_xlim(-0.07,0.070)
 ax2.set_title('b)', loc='left')
-ax2.set_xlabel('Frequenct, MHz')
+ax2.set_xlabel('Frequency, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 ax2.legend()
 plt.tight_layout()
@@ -493,7 +542,7 @@ num_files = len(measurement_files)
 
 # Amplitudes SE
 for filename1, filename2 in zip(measurement_files, baseline):
-    maximum, Time_cut, Amp_cut = read_files_disctionary_se(measurement_files, baseline, filename1, filename2, 'Amp', 'Amp_diff')
+    maximum, Time_cut, Amp_cut = analysis_SE(measurement_files, baseline, filename1, filename2, 'Amp', 'Amp_diff')
 
     color = cmap(time_shift / num_files)
     time_shift += 1
