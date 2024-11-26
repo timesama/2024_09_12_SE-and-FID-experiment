@@ -577,58 +577,108 @@ plt.show()
 
 
 
-# Normalize FID to the amplitude SE at t=0
-time_shift = 0
-for filename1 in measurement_files:
-    amp_difference = np.array(measurement_files[filename1]['Amp_diff'])
-    shifted_time = np.array(measurement_files[filename1]['Time'])
+# # Normalize FID to the amplitude SE at t=0
+# time_shift = 0
+# for filename1 in measurement_files:
+#     amp_difference = np.array(measurement_files[filename1]['Amp_diff'])
+#     shifted_time = np.array(measurement_files[filename1]['Time'])
 
-    match = pattern3.search(filename1)
-    file_key = match.group(1)
+#     match = pattern3.search(filename1)
+#     file_key = match.group(1)
 
-    color = cmap(time_shift / num_files)
-    cut_max_idx = np.argmax(amp_difference)
+#     color = cmap(time_shift / num_files)
+#     cut_max_idx = np.argmax(amp_difference)
 
-    # plt.plot(shifted_time[:-cut_max_idx] + abs(min(shifted_time)), amp_difference[cut_max_idx:], '--', label=file_key, color=color)
-    # plt.legend(title="Echo time in μs")
-    # plt.xlabel('Time, μs')
-    # plt.ylabel('Amplitude, a.u.')
+#     # plt.plot(shifted_time[:-cut_max_idx] + abs(min(shifted_time)), amp_difference[cut_max_idx:], '--', label=file_key, color=color)
+#     # plt.legend(title="Echo time in μs")
+#     # plt.xlabel('Time, μs')
+#     # plt.ylabel('Amplitude, a.u.')
 
-    time_shift += 1
+#     time_shift += 1
 
-# FID fitting and building
-cut_idx = find_nearest(Time_f, 10)
-cut2_idx = find_nearest(Time_f, 18)
-Time_cut = Time_f[cut_idx:cut2_idx]
-Amp_cut = Amp_FID[cut_idx:cut2_idx]
+# # FID fitting and building
+# cut_idx = find_nearest(Time_f, 10)
+# cut2_idx = find_nearest(Time_f, 18)
+# Time_cut = Time_f[cut_idx:cut2_idx]
+# Amp_cut = Amp_FID[cut_idx:cut2_idx]
 
-p = [max(Amp_cut), 18]
-popt, _ = curve_fit(gauss1, Time_cut, Amp_cut, p0=p)
+# p = [max(Amp_cut), 18]
+# popt, _ = curve_fit(gauss1, Time_cut, Amp_cut, p0=p)
 
-Time_fit = np.arange(0, 100, 0.1)
-AMP_fit = gauss1(Time_fit, *popt)
-coeff = extrapolation / max(AMP_fit)
-Amp_n = coeff * AMP_fit
+# Time_fit = np.arange(0, 100, 0.1)
+# AMP_fit = gauss1(Time_fit, *popt)
+# coeff = extrapolation / max(AMP_fit)
+# Amp_n = coeff * AMP_fit
 
-A_const = extrapolation
-popt2, _ = curve_fit(gauss2(A_const), Time_cut, Amp_cut, p0=[8])
-A_built = gauss1(Time_f, A_const, popt2[0])
+# A_const = extrapolation
+# popt2, _ = curve_fit(gauss2(A_const), Time_cut, Amp_cut, p0=[8])
+# A_built = gauss1(Time_f, A_const, popt2[0])
 
-# Find intersections
-diff = A_built - Amp_FID
-sign_changes = np.where(np.diff(np.sign(diff)))[0]
-intersection_times = []
-intersection_amps = []
-intersection_idxs = []
+# # Find intersections
+# diff = A_built - Amp_FID
+# sign_changes = np.where(np.diff(np.sign(diff)))[0]
+# intersection_times = []
+# intersection_amps = []
+# intersection_idxs = []
 
-for idx in sign_changes:
-    t1, t2 = Time_f[idx], Time_f[idx + 1]
-    y1, y2 = diff[idx], diff[idx + 1]
-    t_intersection = t1 - y1 * (t2 - t1) / (y2 - y1)
-    intersection_times.append(t_intersection)
-    amp_intersection = A_built[idx] + (A_built[idx + 1] - A_built[idx]) * (t_intersection - t1) / (t2 - t1)
-    intersection_amps.append(amp_intersection)
-    intersection_idxs.append(idx)
+# for idx in sign_changes:
+#     t1, t2 = Time_f[idx], Time_f[idx + 1]
+#     y1, y2 = diff[idx], diff[idx + 1]
+#     t_intersection = t1 - y1 * (t2 - t1) / (y2 - y1)
+#     intersection_times.append(t_intersection)
+#     amp_intersection = A_built[idx] + (A_built[idx + 1] - A_built[idx]) * (t_intersection - t1) / (t2 - t1)
+#     intersection_amps.append(amp_intersection)
+#     intersection_idxs.append(idx)
+
+# # # plot the fitted and original FID
+# # plt.plot(Time_f, A_built, 'r', label='FID Built')
+# # plt.plot(Time_FID_plot, Amp_FID_plot, 'm', label='Original')
+# # plt.scatter(intersection_times, intersection_amps, color='blue', zorder=5, label='Intersections')
+# # plt.xlabel('Time, μs')
+# # plt.ylabel('Amplitude, a.u.')
+# # plt.legend()
+# # plt.tight_layout()
+# # plt.show()
+
+# # Build-up the FID
+# Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
+# Amp_build_from_zero = gauss1(Time_build_from_zero, A_const, popt2[0])
+
+# Time_build_end = Time_f[intersection_idxs[0]:]
+# Amp_build_end = Amp_FID[intersection_idxs[0]:]
+
+# Time_build_full = np.concatenate((Time_build_from_zero, Time_build_end))
+# Amp_build_full = np.concatenate((Amp_build_from_zero, Amp_build_end))
+
+# # plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
+# # plt.plot(Time_FID_plot, Amp_FID_plot, 'm--', label='Original')
+# # plt.xlabel('Time, μs')
+# # plt.ylabel('Amplitude, a.u.')
+# # plt.legend()
+# # plt.tight_layout()
+# # plt.show()
+
+# # Build-up the FID from MSE
+# # FID fitting and building
+# A_mse = np.max(Amp_MSE)
+# popt2, _ = curve_fit(gauss2(A_mse), Time_cut, Amp_cut, p0=[8])
+# A_built = gauss1(Time_f, A_mse, popt2[0])
+
+# # Find intersections
+# diff = A_built - Amp_FID
+# sign_changes = np.where(np.diff(np.sign(diff)))[0]
+# intersection_times = []
+# intersection_amps = []
+# intersection_idxs = []
+
+# for idx in sign_changes:
+#     t1, t2 = Time_f[idx], Time_f[idx + 1]
+#     y1, y2 = diff[idx], diff[idx + 1]
+#     t_intersection = t1 - y1 * (t2 - t1) / (y2 - y1)
+#     intersection_times.append(t_intersection)
+#     amp_intersection = A_built[idx] + (A_built[idx + 1] - A_built[idx]) * (t_intersection - t1) / (t2 - t1)
+#     intersection_amps.append(amp_intersection)
+#     intersection_idxs.append(idx)
 
 # # plot the fitted and original FID
 # plt.plot(Time_f, A_built, 'r', label='FID Built')
@@ -640,17 +690,17 @@ for idx in sign_changes:
 # plt.tight_layout()
 # plt.show()
 
-# Build-up the FID
-Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
-Amp_build_from_zero = gauss1(Time_build_from_zero, A_const, popt2[0])
+# # Build-up the FID
+# Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
+# Amp_build_from_zero = gauss1(Time_build_from_zero, A_mse, popt2[0])
 
-Time_build_end = Time_f[intersection_idxs[0]:]
-Amp_build_end = Amp_FID[intersection_idxs[0]:]
+# Time_build_end = Time_f[intersection_idxs[0]:]
+# Amp_build_end = Amp_FID[intersection_idxs[0]:]
 
-Time_build_full = np.concatenate((Time_build_from_zero, Time_build_end))
-Amp_build_full = np.concatenate((Amp_build_from_zero, Amp_build_end))
+# Time_build_full_mse = np.concatenate((Time_build_from_zero, Time_build_end))
+# Amp_build_full_mse = np.concatenate((Amp_build_from_zero, Amp_build_end))
 
-# plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
+# plt.plot(Time_build_full_mse, Amp_build_full_mse, 'r', label='FID Built')
 # plt.plot(Time_FID_plot, Amp_FID_plot, 'm--', label='Original')
 # plt.xlabel('Time, μs')
 # plt.ylabel('Amplitude, a.u.')
@@ -658,102 +708,52 @@ Amp_build_full = np.concatenate((Amp_build_from_zero, Amp_build_end))
 # plt.tight_layout()
 # plt.show()
 
-# Build-up the FID from MSE
-# FID fitting and building
-A_mse = np.max(Amp_MSE)
-popt2, _ = curve_fit(gauss2(A_mse), Time_cut, Amp_cut, p0=[8])
-A_built = gauss1(Time_f, A_mse, popt2[0])
+# # Calculate M2 of build-up Fids
+# Frequency_buildupfid_SE, Real_buildupfid_SE, _ = create_spectrum(Time_build_full, Amp_build_full, 0)
+# Frequency_buildupfid_MSE, Real_buildupfid_MSE, _ = create_spectrum(Time_build_full_mse, Amp_build_full_mse, 0)
 
-# Find intersections
-diff = A_built - Amp_FID
-sign_changes = np.where(np.diff(np.sign(diff)))[0]
-intersection_times = []
-intersection_amps = []
-intersection_idxs = []
+# M2_FID_SE, T2_FID_SE = calculate_M2(Real_buildupfid_SE, Frequency_buildupfid_SE)
+# M2_FID_MSE, T2_FID_MSE = calculate_M2(Real_buildupfid_MSE, Frequency_buildupfid_MSE)
 
-for idx in sign_changes:
-    t1, t2 = Time_f[idx], Time_f[idx + 1]
-    y1, y2 = diff[idx], diff[idx + 1]
-    t_intersection = t1 - y1 * (t2 - t1) / (y2 - y1)
-    intersection_times.append(t_intersection)
-    amp_intersection = A_built[idx] + (A_built[idx + 1] - A_built[idx]) * (t_intersection - t1) / (t2 - t1)
-    intersection_amps.append(amp_intersection)
-    intersection_idxs.append(idx)
+# print(f'FID build-up with SE:\nM2: {M2_FID_SE}\nT2: {T2_FID_SE}')
+# print(f'FID build-up with MSE:\nM2: {M2_FID_MSE}\nT2: {T2_FID_MSE}')
 
-# plot the fitted and original FID
-plt.plot(Time_f, A_built, 'r', label='FID Built')
-plt.plot(Time_FID_plot, Amp_FID_plot, 'm', label='Original')
-plt.scatter(intersection_times, intersection_amps, color='blue', zorder=5, label='Intersections')
-plt.xlabel('Time, μs')
-plt.ylabel('Amplitude, a.u.')
-plt.legend()
-plt.tight_layout()
-plt.show()
+# # Water
+# water_cut_1 = find_nearest(Time_w, 10)
+# water_cut_2 = find_nearest(Time_w, 30)
+# Time_water_cut = Time_w[water_cut_1:water_cut_2]
+# Amp_water_cut = Amp_w[water_cut_1:water_cut_2]
+# Amp_water = np.mean(Amp_water_cut)
+# Amp_cellu = popt1[0]
 
-# Build-up the FID
-Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
-Amp_build_from_zero = gauss1(Time_build_from_zero, A_mse, popt2[0])
+# plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
+# plt.plot(Time_w, Amp_w, 'b', label='FID water')
+# plt.plot(Time_water_cut, Amp_water_cut, 'c--', label='Mean')
+# plt.xlabel('Time, μs')
+# plt.ylabel('Amplitude, a.u.')
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
 
-Time_build_end = Time_f[intersection_idxs[0]:]
-Amp_build_end = Amp_FID[intersection_idxs[0]:]
+# # Constants
+# mass_water = 0.0963
+# mass_cellu = 0.1334
+# Avogadro_number= 6.022*(10**23)
+# molar_mass_water = 18.01528
+# molar_mass_cellu = 162.1406
 
-Time_build_full_mse = np.concatenate((Time_build_from_zero, Time_build_end))
-Amp_build_full_mse = np.concatenate((Amp_build_from_zero, Amp_build_end))
+# protons_water = (mass_water/molar_mass_water)*Avogadro_number*2
+# protons_cellu = (mass_cellu/molar_mass_cellu)*Avogadro_number*10
 
-plt.plot(Time_build_full_mse, Amp_build_full_mse, 'r', label='FID Built')
-plt.plot(Time_FID_plot, Amp_FID_plot, 'm--', label='Original')
-plt.xlabel('Time, μs')
-plt.ylabel('Amplitude, a.u.')
-plt.legend()
-plt.tight_layout()
-plt.show()
+# proton_density_water = Amp_water/protons_water
+# proton_density_cellu = Amp_cellu/protons_cellu
 
-# Calculate M2 of build-up Fids
-Frequency_buildupfid_SE, Real_buildupfid_SE, _ = create_spectrum(Time_build_full, Amp_build_full, 0)
-Frequency_buildupfid_MSE, Real_buildupfid_MSE, _ = create_spectrum(Time_build_full_mse, Amp_build_full_mse, 0)
+# Amp_cellu_from_protondensity_water = proton_density_water*protons_cellu
 
-M2_FID_SE, T2_FID_SE = calculate_M2(Real_buildupfid_SE, Frequency_buildupfid_SE)
-M2_FID_MSE, T2_FID_MSE = calculate_M2(Real_buildupfid_MSE, Frequency_buildupfid_MSE)
+# # Print results
+# print(f'The amplitude of cellulose calculated from water is {Amp_cellu_from_protondensity_water}')
 
-print(f'FID build-up with SE:\nM2: {M2_FID_SE}\nT2: {T2_FID_SE}')
-print(f'FID build-up with MSE:\nM2: {M2_FID_MSE}\nT2: {T2_FID_MSE}')
-
-# Water
-water_cut_1 = find_nearest(Time_w, 10)
-water_cut_2 = find_nearest(Time_w, 30)
-Time_water_cut = Time_w[water_cut_1:water_cut_2]
-Amp_water_cut = Amp_w[water_cut_1:water_cut_2]
-Amp_water = np.mean(Amp_water_cut)
-Amp_cellu = popt1[0]
-
-plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
-plt.plot(Time_w, Amp_w, 'b', label='FID water')
-plt.plot(Time_water_cut, Amp_water_cut, 'c--', label='Mean')
-plt.xlabel('Time, μs')
-plt.ylabel('Amplitude, a.u.')
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# Constants
-mass_water = 0.0963
-mass_cellu = 0.1334
-Avogadro_number= 6.022*(10**23)
-molar_mass_water = 18.01528
-molar_mass_cellu = 162.1406
-
-protons_water = (mass_water/molar_mass_water)*Avogadro_number*2
-protons_cellu = (mass_cellu/molar_mass_cellu)*Avogadro_number*10
-
-proton_density_water = Amp_water/protons_water
-proton_density_cellu = Amp_cellu/protons_cellu
-
-Amp_cellu_from_protondensity_water = proton_density_water*protons_cellu
-
-# Print results
-print(f'The amplitude of cellulose calculated from water is {Amp_cellu_from_protondensity_water}')
-
-print(f'Maximum amplitude from SE: {popt1[0]}')
-print(f'Maximum amplitude from MSE: {np.max(Amp_MSE)}')
-print(f'Maximum amplitude from FID: {popt[0]}')
-print('done')
+# print(f'Maximum amplitude from SE: {popt1[0]}')
+# print(f'Maximum amplitude from MSE: {np.max(Amp_MSE)}')
+# print(f'Maximum amplitude from FID: {popt[0]}')
+# print('done')
