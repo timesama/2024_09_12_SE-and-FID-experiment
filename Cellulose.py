@@ -230,7 +230,6 @@ ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID')
 ax1.set_xlim(-5, 80)
 ax1.legend(title="Echo time in μs")
 ax1.set_title('a)', loc='left')
-# ax1.text(30, 35, "a)", fontsize=12, color='black')
 ax1.set_xlabel('Time, μs')
 ax1.set_ylabel('Amplitude')
 
@@ -247,8 +246,6 @@ ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
 ax2.set_xlabel('Echo time, μs')
 ax2.set_ylabel('Amplitude max')
 ax2.set_title('b)', loc='left')
-# ax2.set_title('Max Amplitudes of Solid Echo')
-# ax2.text(12, 42, "b)", fontsize=12, color='black')
 plt.tight_layout()
 plt.show()
 
@@ -352,13 +349,25 @@ def apodization(Time, Real, Imaginary):
     Amplitude = calculate_amplitude(Real, Imaginary)
     coeffs = np.polyfit(Time, Amplitude, 1)  # Fit an exponential decay function
     c = np.polyval(coeffs, Time)
-    d = np.argmin(np.abs(c - 1e-5))
+    d = np.argmin(np.abs(c - 3e-5))
     sigma = Time[d]
     if sigma == 0:
         sigma = 1000
     apodization_function = np.exp(-(Time / sigma) ** 4)
     Re_ap = Real * apodization_function
     Im_ap = Imaginary * apodization_function
+
+    # plt.plot(Time, apodization_function, 'r--', label='apodization')
+    # plt.plot(Time, Imaginary, 'b', label='Im')
+    # plt.plot(Time, Real, 'k', label='Re')
+    # plt.plot(Time, Re_ap, 'k--', label='Re ap')
+    # plt.plot(Time, Im_ap, 'b--', label='Im ap')
+    # plt.xlim([-5,80])
+    # plt.xlabel('Time, μs')
+    # plt.ylabel('Amplitude, a.u.')
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
     return Re_ap, Im_ap
 
 def create_spectrum(Time, Real, Imaginary):
@@ -387,22 +396,15 @@ def create_spectrum(Time, Real, Imaginary):
 
     return Frequency, Real_apod, Im
 
-Re_fp, Im_fp = time_domain_phase(Re_f, Im_f)
-Fr_FID, Re_FID, _ = create_spectrum(Time_f,Re_fp,Im_fp)
-shift_f = Fr_FID[np.argmax(Re_FID)]
-Fr_FID = Fr_FID - shift_f
+def adjust_spectrum (Time, Re, Im):
+    Frequency, Real, _ = create_spectrum(Time, Re, Im)
+    shift = Frequency[np.argmax(Real)]
+    Frequency_shifted = Frequency - shift
+    return Frequency_shifted, Real
 
-
-Fr_SE, Re_SE, _ = create_spectrum(Time_SE,Real_SE,Imag_SE)
-shift_se = Fr_SE[np.argmax(Re_SE)]
-Fr_SE = Fr_SE - shift_se
-
-# MSE has problems
-Re_MSEp, Im_MSEp = time_domain_phase(Re_mse, Im_mse)
-Fr_MSE, Re_MSE, Im_MSE = create_spectrum(Time_MSE,Re_MSEp,Im_MSEp)
-shift_mse = Fr_MSE[np.argmax(Re_MSE)]
-Fr_MSE = Fr_MSE - shift_mse
-#Re_MSEad, Im_MSEad = adjust_frequency(Fr_MSE, Re_MSE, Im_MSE)
+Fr_FID, Re_FID = adjust_spectrum(Time_f, Re_f, Im_f)
+Fr_SE, Re_SE = adjust_spectrum(Time_SE, Real_SE, Imag_SE)
+Fr_MSE, Re_MSE = adjust_spectrum(Time_MSE, Re_mse, Im_mse)
 
 
 # 10. M2 & T2
@@ -425,15 +427,15 @@ plt.tight_layout()
 plt.show()
 
 
-# plt.plot(Fr_FID, Re_FID, 'r', label='FID')
-# plt.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
-# plt.plot(Fr_SE, Re_SE, 'b', label='SE')
-# plt.xlim([-0.07,0.070])
-# plt.xlabel('Frequenct, MHz')
-# plt.ylabel('Intensity, a.u.')
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
+plt.plot(Fr_FID, Re_FID, 'r', label='FID')
+plt.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
+plt.plot(Fr_SE, Re_SE, 'b', label='SE')
+plt.xlim([-0.07,0.070])
+plt.xlabel('Frequenct, MHz')
+plt.ylabel('Intensity, a.u.')
+plt.legend()
+plt.tight_layout()
+plt.show()
 
 # Normalize FID to the amplitude SE at t=0
 time_shift = 0
