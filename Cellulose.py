@@ -197,12 +197,7 @@ def add_zeros(Time, Real, Imaginary, number_of_points):
 def apodization(Time, Real, Imaginary):
     Amplitude = calculate_amplitude(Real, Imaginary)
     sigma = 80
-    # coeffs = np.polyfit(Time, Amplitude, 1)  # Fit an exponential decay function
-    # c = np.polyval(coeffs, Time)
-    # d = np.argmin(np.abs(c - 3e-5))
-    # sigma = Time[d]
-    # if sigma == 0:
-    #     sigma = 1000
+
     apodization_function = np.exp(-(Time / sigma) ** 4)
     Re_ap = Real * apodization_function
     Im_ap = Imaginary * apodization_function
@@ -218,6 +213,7 @@ def apodization(Time, Real, Imaginary):
     # plt.legend()
     # plt.tight_layout()
     # plt.show()
+    
     return Re_ap, Im_ap
 
 def create_spectrum(Time, Real, Imaginary, correct):
