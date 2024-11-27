@@ -163,6 +163,12 @@ def calculate_apodization(Real, Freq):
     apodization_function_s = np.exp(-(Freq / sigma_ap) ** 6)
 
     Real_apod = Real * apodization_function_s
+
+    plt.plot(Freq, Real, 'r', label = 'Original')
+    plt.plot(Freq, apodization_function_s, 'k--', label = 'Apodization')
+    plt.plot(Freq, Real_apod, 'b', label = 'Apodized')
+    plt.legend()
+    plt.show
     
     return Real_apod
 
@@ -183,7 +189,7 @@ def add_zeros(Time, Real, Imaginary, number_of_points):
     amount_to_add = np.zeros(length_diff+1)
 
     Re_zero = np.concatenate((Real, amount_to_add))
-    Im_zero = np.concatenate((Imaginary, amount_to_add))
+    Im_zero = np.concatenate((np.zeros(len(Real)), amount_to_add))
 
     dt = Time[1] - Time[0]
     Time_to_add = Time[-1] + np.arange(1, length_diff + 1) * dt
@@ -196,23 +202,21 @@ def add_zeros(Time, Real, Imaginary, number_of_points):
 
 def apodization(Time, Real, Imaginary):
     Amplitude = calculate_amplitude(Real, Imaginary)
-    sigma = 80
+    sigma = 70
 
     apodization_function = np.exp(-(Time / sigma) ** 4)
     Re_ap = Real * apodization_function
     Im_ap = Imaginary * apodization_function
 
-    # plt.plot(Time, apodization_function, 'r--', label='apodization')
-    # plt.plot(Time, Imaginary, 'b', label='Im')
-    # plt.plot(Time, Real, 'k', label='Re')
-    # plt.plot(Time, Re_ap, 'k--', label='Re ap')
-    # plt.plot(Time, Im_ap, 'b--', label='Im ap')
-    # plt.xlim([-5,80])
-    # plt.xlabel('Time, μs')
-    # plt.ylabel('Amplitude, a.u.')
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.show()
+    plt.plot(Time, apodization_function, 'r--', label='apodization')
+    plt.plot(Time, Real, 'k', label='Re')
+    plt.plot(Time, Re_ap, 'k--', label='Re ap')
+    plt.xlim([-5,80])
+    plt.xlabel('Time, μs')
+    plt.ylabel('Amplitude, a.u.')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
     return Re_ap, Im_ap
 
@@ -220,6 +224,7 @@ def create_spectrum(Time, Real, Imaginary, correct):
     number_of_points = 2**14
     # 5. Apodize the time-domain
     Re_ap, Im_ap = apodization(Time, Real, Imaginary)
+
 
     if correct == True:
         Fr = calculate_frequency_scale(Time)
@@ -241,12 +246,12 @@ def create_spectrum(Time, Real, Imaginary, correct):
     _, Re, Im = simple_baseline_correction(FFT)
 
     # 9. Apodization
-    Real_apod = calculate_apodization(Re, Frequency)
+    #Real_apod = calculate_apodization(Re, Frequency)
 
-    return Frequency, Real_apod, Im
+    return Frequency, Re, Im
 
 def adjust_spectrum (Time, Re, Im):
-    Frequency, Real, _ = create_spectrum(Time, Re, Im, True)
+    Frequency, Real, _ = create_spectrum(Time, Re, Im, False)
     # shift = Frequency[np.argmax(Real)]
     # Frequency = Frequency - shift
     return Frequency, Real
@@ -328,7 +333,7 @@ def reference_long_component(Time, Component_n, end):
     Component_n_range = Component_n[minimum:]
 
     # Smooth data
-    Smooth = savgol_filter(Component_n_range, 30, 0)
+    Smooth = savgol_filter(Component_n_range, 40, 0)
 
     p = [5, 30, 0.5]
     # 7. Fit data to exponential decay
@@ -339,7 +344,6 @@ def reference_long_component(Time, Component_n, end):
 
     # 10. Subtract
     Component_sub = Component_n - Component_f
-
 
     # For Debug
     plt.plot(Time, Component_n, 'r', label='Original')
@@ -378,7 +382,7 @@ for filename in os.listdir(parent_directory):
 # CHECK ZERO!!!
     # FID
     if pattern_FID.match(filename):
-        correction = False
+        correction = True
         Time_fid, Re_td_fid, Im_td_fid, Amp_td_fid = prepare_data(parent_directory, filename, correction)
         Time_fid = Time_fid - 2
 
@@ -411,73 +415,55 @@ for filename in os.listdir(parent_directory):
 
     # SE
     elif pattern.match(filename):
-        correction = False
+        correction = True
         Time, Re, Im, Amp = prepare_data(parent_directory, filename, correction)
+        Time = Time+10
         measurement_files[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
+
 
     # SE empty
     elif pattern2.match(filename):
         Time, Re, Im, Amp = prepare_data(parent_directory, filename, correction)
         baseline[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
 
-# Subtract empty from FID cellulose, FID water and MSE for AMPLITUDES
-Amp_td_fid_sub      = Amp_td_fid - Amp_td_fid_empty
-Amp_td_water_sub    = Amp_td_water - Amp_td_fid_empty
-Amp_td_mse_sub      = Amp_td_mse - Amp_td_fid_empty
-
 # Subtract empty from FID cellulose, FID water and MSE for REAL && IMAG
 Re_td_fid_sub      = Re_td_fid - Re_td_fid_empty
 Re_td_water_sub    = Re_td_water - Re_td_fid_empty
 Re_td_mse_sub      = Re_td_mse - Re_td_fid_empty
 
-Im_td_fid_sub      = Im_td_fid - Im_td_fid_empty
-Im_td_water_sub    = Im_td_water - Im_td_fid_empty
-Im_td_mse_sub      = Im_td_mse - Im_td_fid_empty
-
 # Subtract empty from SE & cut the beginning for AMPLITUDES 
 filename_for_plot_se = 'Cellulose_500scnas_12gain_ 9_c.dat'
 filename_for_plot_empty = 'Empty_500scnas_12gain_ 9_c.dat'
-Amp_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Amp']) - np.array(baseline[filename_for_plot_empty]['Amp'])
 Time_se = np.array(measurement_files[filename_for_plot_se]['Time'])
 
 # Subtract empty from SE & cut the beginning for Real
 Re_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Re']) - np.array(baseline[filename_for_plot_empty]['Re'])
 Im_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Im']) - np.array(baseline[filename_for_plot_empty]['Im'])
 
-# Normalize amplitudes of SE and MSE to FID's 60-70 microsec
-Amp_td_se_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_se_sub, Time_fid, Time_se)
-Amp_td_mse_norm = normalize_to_fid(Amp_td_fid_sub, Amp_td_mse_sub, Time_fid, Time_mse)
-
+# Normalize RE of SE and MSE to FID's 60-70 microsec
 Re_td_se_norm = normalize_to_fid(Re_td_fid_sub, Re_td_se_sub, Time_fid, Time_se)
 Re_td_mse_norm = normalize_to_fid(Re_td_fid_sub, Re_td_mse_sub, Time_fid, Time_mse)
-Im_td_se_norm = normalize_to_fid(Im_td_fid_sub, Im_td_se_sub, Time_fid, Time_se)
-Im_td_mse_norm = normalize_to_fid(Im_td_fid_sub, Im_td_mse_sub, Time_fid, Time_mse)
-
-# Subtract the long component for FID, SE and MSE Amplitudes
-Amp_td_fid_short    = reference_long_component(Time_fid, Amp_td_fid_sub, end= 50)
-Amp_td_mse_short    = reference_long_component(Time_mse, Amp_td_mse_norm, end= 50)
-Amp_td_se_short     = reference_long_component(Time_se, Amp_td_se_norm, end= 80)
 
 # Subtract the long component for FID, SE and MSE REAL & IMAG
-Re_td_fid_short    = reference_long_component(Time_fid, Re_td_fid_sub, end= 50)
-Re_td_mse_short    = reference_long_component(Time_mse, Re_td_mse_norm, end= 50)
-Re_td_se_short     = reference_long_component(Time_se, Re_td_se_norm, end= 80)
+Re_td_fid_short    = reference_long_component(Time_fid, Re_td_fid_sub, end= 55)
+Re_td_mse_short    = reference_long_component(Time_mse, Re_td_mse_norm, end= 55)
+Re_td_se_short     = reference_long_component(Time_se, Re_td_se_norm, end= 55)
 
 # Cut the beginning for amplitudes and real for FID and MSE
-Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_td_fid_short)
-_, Re_FID_plot = cut_beginning(Time_fid, Re_td_fid_short)
-
-Time_MSE_plot, Amp_MSE_plot = cut_beginning(Time_mse, Amp_td_mse_short)
-Time_MSE_plot_Re, Re_MSE_plot = cut_beginning(Time_mse, Re_td_mse_short)
-
-Time_SE_plot, Amp_SE_plot = cut_beginning(Time_se, Amp_td_se_short)
-Time_SE_plot_Re, Re_SE_plot = cut_beginning(Time_se, Re_td_se_short)
+Time_FID_plot, Re_FID_plot      = cut_beginning(Time_fid, Re_td_fid_short)
+Time_MSE_plot_Re, Re_MSE_plot   = cut_beginning(Time_mse, Re_td_mse_short)
+Time_SE_plot_Re, Re_SE_plot     = cut_beginning(Time_se, Re_td_se_short)
 
 ## PLOT FID, SE and MSE all together
 # comparison of FID, SE and MSE
-Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_td_fid_short, 0)
+
+#Still a lot of oscillations SET THE RIGHT ZERO + cut the beginning part and enjoy
+# The spectra is a little bit too wide
+# Don't forget to delete the +10 in time for solid echo
+Fr_FID, Re_FID = adjust_spectrum(Time_FID_plot, Re_FID_plot, 0)
+# Fr_SE, Re_SE = adjust_spectrum(Time_SE_plot_Re, Re_SE_plot, 0)
 Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_td_se_short, 0)
-Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_td_mse_short , 0)
+Fr_MSE, Re_MSE = adjust_spectrum(Time_MSE_plot_Re, Re_MSE_plot , 0)
 
 # 10. M2 & T2
 M2_FID, T2_FID = calculate_M2(Re_FID, Fr_FID)
@@ -519,7 +505,7 @@ num_files = len(measurement_files)
 
 # Amplitudes SE
 for filename1, filename2 in zip(measurement_files, baseline):
-    maximum, Time_cut, Amp_cut = analysis_SE(measurement_files, baseline, filename1, filename2, 'Amp', 'Amp_diff')
+    maximum, Time_cut, Amp_cut = analysis_SE(measurement_files, baseline, filename1, filename2, 'Re', 'Re_diff')
 
     color = cmap(time_shift / num_files)
     time_shift += 1
@@ -530,7 +516,7 @@ for filename1, filename2 in zip(measurement_files, baseline):
 
     ax1.plot(Time_cut, Amp_cut, label=file_key, color=color)
 
-ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID')
+ax1.plot(Time_FID_plot, Re_FID_plot, 'r', label='FID')
 ax1.set_xlim(-5, 80)
 ax1.legend(title="Echo time in μs")
 ax1.set_title('a)', loc='left')
@@ -592,25 +578,10 @@ def build_up_fid(Time, Data, A):
 
 # Build up FIDS from SE/MSE Amplitudes and Real
 A_se = extrapolation
-A_mse = np.max(Amp_td_mse_norm)
-Time_build_full_se, Amp_build_full_se, Amp_build_se = build_up_fid(Time_fid, Amp_td_fid_short, A_se)
-Time_build_full_mse, Amp_build_full_mse, Amp_build_mse = build_up_fid(Time_fid, Amp_td_fid_short, A_mse)
+A_mse = np.max(Re_td_mse_norm)
 
 Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_short, A_se)
 Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse)
-
-# Calculate M2 of build-up Fids Amplitudes
-Frequency_buildupfid_SE, Real_buildupfid_SE, _      = create_spectrum(Time_build_full_se, Amp_build_full_se, 0, True)
-Frequency_buildupfid_MSE, Real_buildupfid_MSE, _    = create_spectrum(Time_build_full_mse, Amp_build_full_mse, 0, True)
-
-# Frequency_buildupfid_SE, Real_buildupfid_SE, _      = create_spectrum(Time_fid, Amp_build_se, 0, True)
-# Frequency_buildupfid_MSE, Real_buildupfid_MSE, _    = create_spectrum(Time_fid, Amp_build_mse, 0, True)
-
-M2_FID_SE, T2_FID_SE    = calculate_M2(Real_buildupfid_SE, Frequency_buildupfid_SE)
-M2_FID_MSE, T2_FID_MSE  = calculate_M2(Real_buildupfid_MSE, Frequency_buildupfid_MSE)
-
-print(f'FID build-up with SE:\nM2: {M2_FID_SE}\nT2: {T2_FID_SE}')
-print(f'FID build-up with MSE:\nM2: {M2_FID_MSE}\nT2: {T2_FID_MSE}')
 
 # Calculate M2 of build-up Fids real
 Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, True)
@@ -623,42 +594,24 @@ print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
 print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
 
 # PLOT 
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))
-ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID original')
-ax1.plot(Time_build_full_mse, Amp_build_full_mse, 'k', label='FID from MSE')
-ax1.plot(Time_build_full_se, Amp_build_full_se, 'b', label='FID from SE')
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+ax1.plot(Time_FID_plot, Re_FID_plot, 'r', label='FID original')
+ax1.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
+ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
 ax1.set_xlim(-5, 80)
-ax1.set_title('a)', loc='left')
+ax1.set_title('c)', loc='left')
 ax1.set_xlabel('Time, μs')
 ax1.set_ylabel('Amplitude, a.u.')
 ax1.legend()
 
 ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
-ax2.plot(Frequency_buildupfid_MSE, Real_buildupfid_MSE, 'k', label='MSE')
-ax2.plot(Frequency_buildupfid_SE, Real_buildupfid_SE, 'b', label='SE')
+ax2.plot(Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, 'k', label='MSE')
+ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
 ax2.set_xlim(-0.07,0.070)
-ax2.set_title('b)', loc='left')
+ax2.set_title('d)', loc='left')
 ax2.set_xlabel('Frequency, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 ax2.legend()
-
-ax3.plot(Time_FID_plot, Re_FID_plot, 'r', label='FID original')
-ax3.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
-ax3.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
-ax3.set_xlim(-5, 80)
-ax3.set_title('c)', loc='left')
-ax3.set_xlabel('Time, μs')
-ax3.set_ylabel('Amplitude, a.u.')
-ax3.legend()
-
-ax4.plot(Fr_FID, Re_FID, 'r', label='FID')
-ax4.plot(Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, 'k', label='MSE')
-ax4.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
-ax4.set_xlim(-0.07,0.070)
-ax4.set_title('d)', loc='left')
-ax4.set_xlabel('Frequency, MHz')
-ax4.set_ylabel('Intensity, a.u.')
-ax4.legend()
 
 plt.tight_layout()
 plt.show()
