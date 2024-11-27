@@ -213,7 +213,7 @@ def apodization(Time, Real, Imaginary):
     # plt.legend()
     # plt.tight_layout()
     # plt.show()
-    
+
     return Re_ap, Im_ap
 
 def create_spectrum(Time, Real, Imaginary, correct):
@@ -453,23 +453,31 @@ Re_td_mse_norm = normalize_to_fid(Re_td_fid_sub, Re_td_mse_sub, Time_fid, Time_m
 Im_td_se_norm = normalize_to_fid(Im_td_fid_sub, Im_td_se_sub, Time_fid, Time_se)
 Im_td_mse_norm = normalize_to_fid(Im_td_fid_sub, Im_td_mse_sub, Time_fid, Time_mse)
 
-# Subtract the long component could be here, but there is no need to do that
+# Subtract the long component for FID, SE and MSE Amplitudes
+Amp_td_fid_short    = reference_long_component(Time_fid, Amp_td_fid_sub, end= 50)
+Amp_td_mse_short    = reference_long_component(Time_mse, Amp_td_mse_norm, end= 50)
+Amp_td_se_short     = reference_long_component(Time_se, Amp_td_se_norm, end= 80)
+
+# Subtract the long component for FID, SE and MSE REAL & IMAG
+Re_td_fid_short    = reference_long_component(Time_fid, Re_td_fid_sub, end= 50)
+Re_td_mse_short    = reference_long_component(Time_mse, Re_td_mse_norm, end= 50)
+Re_td_se_short     = reference_long_component(Time_se, Re_td_se_norm, end= 80)
 
 # Cut the beginning for amplitudes and real for FID and MSE
-Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_td_fid_sub)
-_, Re_FID_plot = cut_beginning(Time_fid, Re_td_fid_sub)
+Time_FID_plot, Amp_FID_plot = cut_beginning(Time_fid, Amp_td_fid_short)
+_, Re_FID_plot = cut_beginning(Time_fid, Re_td_fid_short)
 
-Time_MSE_plot, Amp_MSE_plot = cut_beginning(Time_mse, Amp_td_mse_norm)
-Time_MSE_plot_Re, Re_MSE_plot = cut_beginning(Time_mse, Re_td_mse_norm)
+Time_MSE_plot, Amp_MSE_plot = cut_beginning(Time_mse, Amp_td_mse_short)
+Time_MSE_plot_Re, Re_MSE_plot = cut_beginning(Time_mse, Re_td_mse_short)
 
-Time_SE_plot, Amp_SE_plot = cut_beginning(Time_se, Amp_td_se_norm)
-Time_SE_plot_Re, Re_SE_plot = cut_beginning(Time_se, Re_td_se_norm)
+Time_SE_plot, Amp_SE_plot = cut_beginning(Time_se, Amp_td_se_short)
+Time_SE_plot_Re, Re_SE_plot = cut_beginning(Time_se, Re_td_se_short)
 
 ## PLOT FID, SE and MSE all together
 # comparison of FID, SE and MSE
-Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_td_fid_sub, 0)
-Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_td_se_sub, 0)
-Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_td_mse_sub , 0)
+Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_td_fid_short, 0)
+Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_td_se_short, 0)
+Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_td_mse_short , 0)
 
 # 10. M2 & T2
 M2_FID, T2_FID = calculate_M2(Re_FID, Fr_FID)
@@ -478,26 +486,6 @@ M2_FID, T2_FID = calculate_M2(Re_SE, Fr_SE)
 print(f'SE\nM2: {M2_FID}\nT2: {T2_FID}')
 M2_FID, T2_FID = calculate_M2(Re_MSE, Fr_MSE)
 print(f'MSE\nM2: {M2_FID}\nT2: {T2_FID}')
-
-# #plot FID, MSE and SE AMPLITUDES
-# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-# ax1.plot(Time_FID_plot, Amp_FID_plot, 'r', label='FID')
-# ax1.plot(Time_MSE_plot, Amp_MSE_plot, 'k', label='MSE')
-# ax1.plot(Time_SE_plot, Amp_SE_plot, 'b', label='SE')
-# ax1.set_xlim(-5, 80)
-# ax1.set_title('a)', loc='left')
-# ax1.set_xlabel('Time, μs')
-# ax1.set_ylabel('Amplitude, a.u.')
-
-# ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
-# ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
-# ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
-# ax2.set_xlim(-0.07,0.070)
-# ax2.set_title('b)', loc='left')
-# ax2.set_xlabel('Frequency, MHz')
-# ax2.set_ylabel('Intensity, a.u.')
-# plt.tight_layout()
-# plt.show()
 
 #plot FID, MSE and SE REAL
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
@@ -605,11 +593,11 @@ def build_up_fid(Time, Data, A):
 # Build up FIDS from SE/MSE Amplitudes and Real
 A_se = extrapolation
 A_mse = np.max(Amp_td_mse_norm)
-Time_build_full_se, Amp_build_full_se, Amp_build_se = build_up_fid(Time_fid, Amp_td_fid_sub, A_se)
-Time_build_full_mse, Amp_build_full_mse, Amp_build_mse = build_up_fid(Time_fid, Amp_td_fid_sub, A_mse)
+Time_build_full_se, Amp_build_full_se, Amp_build_se = build_up_fid(Time_fid, Amp_td_fid_short, A_se)
+Time_build_full_mse, Amp_build_full_mse, Amp_build_mse = build_up_fid(Time_fid, Amp_td_fid_short, A_mse)
 
-Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_sub, A_se)
-Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_sub, A_mse)
+Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_short, A_se)
+Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse)
 
 # Calculate M2 of build-up Fids Amplitudes
 Frequency_buildupfid_SE, Real_buildupfid_SE, _      = create_spectrum(Time_build_full_se, Amp_build_full_se, 0, True)
@@ -675,42 +663,42 @@ ax4.legend()
 plt.tight_layout()
 plt.show()
 
-# Water
-water_cut_1 = find_nearest(Time_w, 10)
-water_cut_2 = find_nearest(Time_w, 30)
-Time_water_cut = Time_w[water_cut_1:water_cut_2]
-Amp_water_cut = Amp_w[water_cut_1:water_cut_2]
-Amp_water = np.mean(Amp_water_cut)
-Amp_cellu = popt1[0]
+# # Water
+# water_cut_1 = find_nearest(Time_w, 10)
+# water_cut_2 = find_nearest(Time_w, 30)
+# Time_water_cut = Time_w[water_cut_1:water_cut_2]
+# Amp_water_cut = Amp_w[water_cut_1:water_cut_2]
+# Amp_water = np.mean(Amp_water_cut)
+# Amp_cellu = popt1[0]
 
-plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
-plt.plot(Time_w, Amp_w, 'b', label='FID water')
-plt.plot(Time_water_cut, Amp_water_cut, 'c--', label='Mean')
-plt.xlabel('Time, μs')
-plt.ylabel('Amplitude, a.u.')
-plt.legend()
-plt.tight_layout()
-plt.show()
+# plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
+# plt.plot(Time_w, Amp_w, 'b', label='FID water')
+# plt.plot(Time_water_cut, Amp_water_cut, 'c--', label='Mean')
+# plt.xlabel('Time, μs')
+# plt.ylabel('Amplitude, a.u.')
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
 
-# Constants
-mass_water = 0.0963
-mass_cellu = 0.1334
-Avogadro_number= 6.022*(10**23)
-molar_mass_water = 18.01528
-molar_mass_cellu = 162.1406
+# # Constants
+# mass_water = 0.0963
+# mass_cellu = 0.1334
+# Avogadro_number= 6.022*(10**23)
+# molar_mass_water = 18.01528
+# molar_mass_cellu = 162.1406
 
-protons_water = (mass_water/molar_mass_water)*Avogadro_number*2
-protons_cellu = (mass_cellu/molar_mass_cellu)*Avogadro_number*10
+# protons_water = (mass_water/molar_mass_water)*Avogadro_number*2
+# protons_cellu = (mass_cellu/molar_mass_cellu)*Avogadro_number*10
 
-proton_density_water = Amp_water/protons_water
-proton_density_cellu = Amp_cellu/protons_cellu
+# proton_density_water = Amp_water/protons_water
+# proton_density_cellu = Amp_cellu/protons_cellu
 
-Amp_cellu_from_protondensity_water = proton_density_water*protons_cellu
+# Amp_cellu_from_protondensity_water = proton_density_water*protons_cellu
 
-# Print results
-print(f'The amplitude of cellulose calculated from water is {Amp_cellu_from_protondensity_water}')
+# # Print results
+# print(f'The amplitude of cellulose calculated from water is {Amp_cellu_from_protondensity_water}')
 
-print(f'Maximum amplitude from SE: {popt1[0]}')
-print(f'Maximum amplitude from MSE: {np.max(Amp_MSE)}')
-print(f'Maximum amplitude from FID: {popt[0]}')
+# print(f'Maximum amplitude from SE: {popt1[0]}')
+# print(f'Maximum amplitude from MSE: {np.max(Amp_MSE)}')
+# print(f'Maximum amplitude from FID: {popt[0]}')
 print('done')
