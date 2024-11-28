@@ -79,24 +79,11 @@ def find_nearest(array, value):
 def gauss(x, A, mu, sigma):
     return A * np.exp(-(x - mu)**2 / (2 * sigma**2))
 
-def gauss3(x, A, sigma, y0):
+def gauss1(x, A, sigma, y0):
     return A * np.exp(-x**2 / (2 * sigma**2)) + y0
 
-# def gauss2(amplitude):
-#     return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
-
-def gauss1(x, A1, A2, sigma1, sigma2, y0):
-    return A1 * np.exp(-x**2 / (2 * sigma1**2)) + A2 * np.exp(-x**2 / (2 * sigma2**2)) + y0
-
-def gauss2(total_amplitude):
-    return lambda x, ratio, sigma1, sigma2, y0: gauss1(
-        x, 
-        total_amplitude * ratio, 
-        total_amplitude * (1 - ratio), 
-        sigma1, 
-        sigma2, 
-        y0
-    )
+def gauss2(amplitude):
+    return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
 
 def decaying_exponential(x, a, b, c):
     return a * np.exp(-x/b) + c
@@ -219,15 +206,15 @@ def apodization(Time, Real, Imaginary):
     Re_ap = Real * apodization_function
     Im_ap = Imaginary * apodization_function
 
-    # plt.plot(Time, apodization_function, 'r--', label='apodization')
-    # plt.plot(Time, Real, 'k', label='Re')
-    # plt.plot(Time, Re_ap, 'k--', label='Re ap')
-    # plt.xlim([-5,80])
-    # plt.xlabel('Time, μs')
-    # plt.ylabel('Amplitude, a.u.')
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.show()
+    plt.plot(Time, apodization_function, 'r--', label='apodization')
+    plt.plot(Time, Real, 'k', label='Re')
+    plt.plot(Time, Re_ap, 'k--', label='Re ap')
+    plt.xlim([-5,80])
+    plt.xlabel('Time, μs')
+    plt.ylabel('Amplitude, a.u.')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
     return Re_ap, Im_ap
 
@@ -528,9 +515,8 @@ for filename1, filename2 in zip(measurement_files, baseline):
 
 # Gaussian fit for SE maximum amplitude
 p1 = [10, 6, 1] # Initial guess
-popt1, _ = curve_fit(gauss3, echo_time, maximum, p0=p1)
-print(popt1)
-fitting_line = gauss3(echo_time_fit, *popt1)
+popt1, _ = curve_fit(gauss1, echo_time, maximum, p0=p1)
+fitting_line = gauss1(echo_time_fit, *popt1)
 extrapolation = fitting_line[0]
 
 # ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
@@ -545,20 +531,12 @@ extrapolation = fitting_line[0]
 def build_up_fid(Time, Data, A):
     # Normalize FID to the amplitude A
     # 1. Cut the FID between 10 and 18 microsec
-    Time_cut    = Time[find_nearest(Time, 11):find_nearest(Time, 18)]
-    Data_cut    = Data[find_nearest(Time, 11):find_nearest(Time, 18)]
+    Time_cut    = Time[find_nearest(Time, 11):find_nearest(Time, 20)]
+    Data_cut    = Data[find_nearest(Time, 11):find_nearest(Time, 20)]
 
     # Fit the small part of the FID with gauss function with restricted amplitude
-    popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[10, 1 , 1 , 10])
-    A1, A2 = A * popt2[0], A * (A - popt2[0])
-    Data_built = gauss1(Time, A1, A2, popt2[1], popt2[2], popt2[3])
-
-    #gauss1(x, A1, A2, sigma1, sigma2, y0):
-
-    plt.plot(Time, Data, 'r', label='data')
-    plt.plot(Data_built, Time, 'r--', label='Fit')
-    plt.tight_layout()
-    plt.show()
+    popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
+    Data_built = gauss1(Time, A, popt2[0], popt2[1])
 
     # Find intersections between FID original and build
     diff = Data_built - Data
@@ -578,7 +556,7 @@ def build_up_fid(Time, Data, A):
 
     # Build-up the FID
     Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
-    Data_build_from_zero = gauss1(Time_build_from_zero, A, popt2[0], popt2[1], popt2[2], popt2[3])
+    Data_build_from_zero = gauss1(Time_build_from_zero, A, popt2[0], popt2[1])
 
     Time_build_end  = Time[intersection_idxs[0]+1:]
     Data_build_end   = Data[intersection_idxs[0]+1:]
@@ -596,7 +574,7 @@ Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_
 Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse)
 
 # Calculate M2 of build-up Fids real
-Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, False)
+Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, True)
 Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, _    = create_spectrum(Time_build_full_mse_r, Re_build_full_mse, 0, True)
 
 M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
