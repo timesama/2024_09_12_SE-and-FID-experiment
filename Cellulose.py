@@ -85,6 +85,12 @@ def gauss1(x, A, sigma, y0):
 def gauss2(amplitude):
     return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
 
+def poly1(x, A, b, c, d, g):
+    return A + b * x + c * x**2 + d * x**3 + g * x**4
+
+def poly2(amplitude):
+    return lambda x, b, c, d, g: poly1(x, amplitude, b, c, d, g)
+
 def decaying_exponential(x, a, b, c):
     return a * np.exp(-x/b) + c
 
@@ -536,7 +542,11 @@ def build_up_fid(Time, Data, A):
 
     # Fit the small part of the FID with gauss function with restricted amplitude
     popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
-    Data_built = gauss1(Time, A, popt2[0], popt2[1])
+    Data_built = gauss1(Time, A, *popt2)
+
+    # # Fit the small part of the FID with polynom (4 degree)
+    # popt, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[1, 1, 1, 1])  # Начальные приближения для остальных коэффициентов
+    # Data_built = poly1(Time, A, *popt)  # Восстановление данных
 
     # Find intersections between FID original and build
     diff = Data_built - Data
@@ -554,15 +564,23 @@ def build_up_fid(Time, Data, A):
         intersection_amps.append(amp_intersection)
         intersection_idxs.append(idx)
 
+    plt.plot(Time, Data_built, 'r')
+    plt.plot(Time, Data, 'b')
+    plt.plot(intersection_times, intersection_amps, '.k')
+    plt.show
+
     # Build-up the FID
     Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
-    Data_build_from_zero = gauss1(Time_build_from_zero, A, popt2[0], popt2[1])
+    Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
+    # Data_build_from_zero =  poly1(Time_build_from_zero, A, *popt)
 
     Time_build_end  = Time[intersection_idxs[0]+1:]
     Data_build_end   = Data[intersection_idxs[0]+1:]
 
     Time_build_full = np.concatenate((Time_build_from_zero, Time_build_end))
     Data_build_full  = np.concatenate((Data_build_from_zero, Data_build_end))
+
+    # Data_build_full = savgol_filter(Data_build_full, 40, 2)
 
     return Time_build_full, Data_build_full, Data_built
 
