@@ -206,15 +206,15 @@ def apodization(Time, Real, Imaginary):
     Re_ap = Real * apodization_function
     Im_ap = Imaginary * apodization_function
 
-    plt.plot(Time, apodization_function, 'r--', label='apodization')
-    plt.plot(Time, Real, 'k', label='Re')
-    plt.plot(Time, Re_ap, 'k--', label='Re ap')
-    plt.xlim([-5,80])
-    plt.xlabel('Time, μs')
-    plt.ylabel('Amplitude, a.u.')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # plt.plot(Time, apodization_function, 'r--', label='apodization')
+    # plt.plot(Time, Real, 'k', label='Re')
+    # plt.plot(Time, Re_ap, 'k--', label='Re ap')
+    # plt.xlim([-5,80])
+    # plt.xlabel('Time, μs')
+    # plt.ylabel('Amplitude, a.u.')
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
 
     return Re_ap, Im_ap
 
@@ -604,6 +604,22 @@ ax2.set_ylabel('Intensity, a.u.')
 ax2.legend()
 
 plt.tight_layout()
+plt.show()
+
+# Difference FID and SE real components
+
+# Setting time arrays to be the same length
+Time_to_start_from = Time_se[find_nearest(Time_fid[0], Time_se):]
+Time_to_finish_at = Time_fid[:find_nearest(Time_se[-1], Time_fid)+1]
+
+# Setting Re of FID and SE to be the same length
+# I need to cut the beginning of SE and the end of FID
+SE_re_difference = Re_td_se_short[find_nearest(Time_fid[0], Time_se):]
+FID_re_difference = Re_td_fid_short[:find_nearest(Time_se[-1], Time_fid)+1]
+Difference = FID_re_difference - SE_re_difference
+
+
+plt.plot(Time_to_start_from, Difference)
 plt.show()
 
 # # Water
