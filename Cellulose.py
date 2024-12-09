@@ -471,30 +471,8 @@ print(f'SE\nM2: {M2_FID}\nT2: {T2_FID}')
 M2_FID, T2_FID = calculate_M2(Re_MSE, Fr_MSE)
 print(f'MSE\nM2: {M2_FID}\nT2: {T2_FID}')
 
-# #plot FID, MSE and SE REAL
-# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-# ax1.plot(Time_mse, Re_td_mse_short, 'k', label='MSE')
-# ax1.plot(Time_se, Re_td_se_short, 'b', label='SE')
-# ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
-# ax1.set_xlim(-5, 80)
-# ax1.set_title('a)', loc='left')
-# ax1.set_xlabel('Time, μs')
-# ax1.set_ylabel('Amplitude, a.u.')
-# ax1.legend()
-
-# ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
-# ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
-# ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
-# ax2.set_xlim(-0.15,0.15)
-# ax2.set_title('b)', loc='left')
-# ax2.set_xlabel('Frequency, MHz')
-# ax2.set_ylabel('Intensity, a.u.')
-# ax2.legend()
-# plt.tight_layout()
-# plt.show()
-
 #### SE part
-# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
 cmap = plt.get_cmap('winter')
 
 # Processing SE data
@@ -511,13 +489,13 @@ for filename1, filename2 in zip(measurement_files, baseline):
     match = pattern3.search(filename1)
     file_key = match.group(1)
 
-# ax1.plot(Time_cut, Amp_re_cut, label=file_key, color=color)
-# ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
-# ax1.set_xlim(-5, 80)
-# ax1.legend(title="Echo time in μs")
-# ax1.set_title('a)', loc='left')
-# ax1.set_xlabel('Time, μs')
-# ax1.set_ylabel('Amplitude')
+    ax1.plot(Time_cut, Amp_re_cut, label=file_key, color=color)
+ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
+ax1.set_xlim(-5, 80)
+ax1.legend(title="Echo time in μs")
+ax1.set_title('a)', loc='left')
+ax1.set_xlabel('Time, μs')
+ax1.set_ylabel('Amplitude')
 
 # Gaussian fit for SE maximum amplitude
 p1 = [10, 6, 1] # Initial guess
@@ -525,19 +503,22 @@ popt1, _ = curve_fit(gauss1, echo_time, maximum, p0=p1)
 fitting_line = gauss1(echo_time_fit, *popt1)
 extrapolation = fitting_line[0]
 
-# ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
-# ax2.plot(echo_time_fit, fitting_line, 'r--', label='Gaussian Fit')
-# ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
-# ax2.set_xlabel('Echo time, μs')
-# ax2.set_ylabel('Amplitude max')
-# ax2.set_title('b)', loc='left')
-# plt.tight_layout()
-# plt.show()
+# Show SE decays and maxima fitting
+
+ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
+ax2.plot(echo_time_fit, fitting_line, 'r--', label='Gaussian Fit')
+ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
+ax2.set_xlabel('Echo time, μs')
+ax2.set_ylabel('Amplitude max')
+ax2.set_title('b)', loc='left')
+plt.tight_layout()
+plt.show()
+
 
 def build_up_fid(Time, Data, A):
     # Normalize FID to the amplitude A
     # 1. Cut the FID between 10 and 18 microsec
-    start = 10
+    start = 15
     finish = 20
 
     Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
@@ -600,22 +581,48 @@ M2_FID_MSE_r, T2_FID_MSE_r  = calculate_M2(Real_buildupfid_MSE_r, Frequency_buil
 print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
 print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
 
-# PLOT 
+# PLOT all figures here
+
+#plot FID, MSE and SE REAL
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
-ax1.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
-ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
+ax1.plot(Time_mse, Re_td_mse_short, 'k', label='MSE')
+ax1.plot(Time_se, Re_td_se_short, 'b', label='SE')
+ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
 ax1.set_xlim(-5, 80)
-ax1.set_title('c)', loc='left')
+ax1.set_title('a) NMR Signal', loc='left')
 ax1.set_xlabel('Time, μs')
 ax1.set_ylabel('Amplitude, a.u.')
 ax1.legend()
 
+ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
+ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
 ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
+ax2.set_xlim(-0.15,0.15)
+ax2.set_title('b) FFT spectra', loc='left')
+ax2.set_xlabel('Frequency, MHz')
+ax2.set_ylabel('Intensity, a.u.')
+ax2.legend()
+plt.tight_layout()
+plt.show()
+
+
+## Build-up decys and spectra
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+ax1.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
+ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
+ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
+ax1.set_xlim(-5, 80)
+ax1.set_title('a) NMR Signal', loc='left')
+ax1.set_xlabel('Time, μs')
+ax1.set_ylabel('Amplitude, a.u.')
+ax1.legend()
+
+
 ax2.plot(Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, 'k', label='MSE')
 ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
+ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
 ax2.set_xlim(-0.3,0.3)
-ax2.set_title('d)', loc='left')
+ax2.set_title('b) FFT spectra', loc='left')
 ax2.set_xlabel('Frequency, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 ax2.legend()
@@ -624,8 +631,12 @@ plt.tight_layout()
 plt.show()
 
 
+## Save build-up data for export
 df = pd.DataFrame({'Time' : Time_build_full_mse_r, 'Re': Re_build_full_mse})
 df.to_csv("MSE_build_up.dat", sep ='\t', index = 'none')
+
+df = pd.DataFrame({'Time' : Time_build_full_se_r, 'Re': Re_build_full_se})
+df.to_csv("SE_build_up.dat", sep ='\t', index = 'none')
 
 
 
