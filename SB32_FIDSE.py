@@ -174,6 +174,14 @@ def calculate_M2(FFT_real, Frequency):
     # The (2pi)^2 are the units to transform from rad/sec to Hz
     # ppbly it should be (2pi)^n for generalized moment calculation
     M2 = (np.trapz(Multiplication)) * 4 * np.pi ** 2
+
+    # # For Debug
+    # plt.plot(Frequency, Multiplication, 'k', label='M2')
+    # plt.xlabel('Frequency, MHz')
+    # plt.ylabel('Amplitude, a.u.')
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
     
     # Check the validity
     if np.abs(np.mean(Multiplication[0:10])) > 10 ** (-6):
@@ -209,11 +217,11 @@ def calculate_apodization(Real, Freq):
 
     Real_apod = Real * apodization_function_s
 
-    plt.plot(Freq, Real, 'r', label = 'Original')
-    plt.plot(Freq, apodization_function_s, 'k--', label = 'Apodization')
-    plt.plot(Freq, Real_apod, 'b', label = 'Apodized')
-    plt.legend()
-    plt.show
+    # plt.plot(Freq, Real, 'r', label = 'Original')
+    # plt.plot(Freq, apodization_function_s, 'k--', label = 'Apodization')
+    # plt.plot(Freq, Real_apod, 'b', label = 'Apodized')
+    # plt.legend()
+    # plt.show()
     
     return Real_apod
 
@@ -303,9 +311,9 @@ def create_spectrum(Time, Real, Imaginary, correct):
     _, Re, Im = simple_baseline_correction(FFT)
 
     # 9. Apodization
-    #Real_apod = calculate_apodization(Re, Frequency)
+    Real_apod = calculate_apodization(Re, Frequency)
 
-    return Frequency, Re, Im
+    return Frequency, Real_apod, Im
 
 # Read data from file
 def read_data(file_path):
@@ -375,6 +383,20 @@ def reference_long_component(Time, Component_n, end):
 
     return Component_sub
 
+def full_analysis(parent_directory, filename):
+    #Read data
+    Time, Re, Im, Amp = prepare_data(parent_directory, filename, False)
+    # Reference long component from 60 till the end
+    Re_td_short    = reference_long_component(Time, Re, end= 60)
+    # create spectra without imaginary
+    Freq, Re_spectra, Im_spectra = create_spectrum(Time, Re_td_short, 0, False)
+    # calculate amplitude
+    Amp_spectra = calculate_amplitude(Re_spectra, Im_spectra)
+    # Calculate M2
+    M2_FID, T2_FID = calculate_M2(Re_spectra, Freq)
+    # print(f'for {filename}:\nM2: {M2_FID}\nT2: {T2_FID}\n')
+
+    return Time, Re_td_short, Freq, Re_spectra, Im_spectra, Amp_spectra
 
 # Read data
 parent_directory = r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experiment\SB32'
@@ -382,26 +404,116 @@ parent_directory = r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experimen
 SE_file = r'SE_Cellulose_ 6_c.dat'
 FID_file = r'FID_Cellulose_ 6_c.dat'
 
-Time_SE1, Re_SE1, Im_SE1 = read_data(r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experiment\SB32\SE_Cellulose_ 6_c.dat')
-Time_SE, Re_SE, Im_SE, Amp_SE = prepare_data(parent_directory, SE_file, False)
+Time_SE1, Re_SE1, Im_SE1 = read_data(os.path.join(parent_directory, SE_file))
+Time_FID1, Re_FID1, Im_FID1 = read_data(os.path.join(parent_directory, FID_file))
 
-Time_FID1, Re_FID1, Im_FID1 = read_data(r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experiment\SB32\FID_Cellulose_ 6_c.dat')
-Time_FID, Re_FID, Im_FID, Amp_FID = prepare_data(parent_directory, FID_file, False)
+Time_SE, Re_td_se_short, Fr_SE, Re_SE, Im_SE, Amp_SE = full_analysis(parent_directory, SE_file)
+Time_FID, Re_td_fid_short, Fr_FID, Re_FID, Im_FID, Amp_FID = full_analysis(parent_directory, FID_file)
 
-# Subtract the long component for FID, SE and MSE REAL & IMAG
-Re_td_fid_short    = reference_long_component(Time_FID, Re_FID, end= 60)
-Re_td_se_short     = reference_long_component(Time_SE, Re_SE, end= 60)
+# Calculate the maximum from SE's
+parent_directory_se = r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experiment\SB32\cycle_SE'
+pattern_SE = re.compile(r'SE_Cellulose_ ([0-9]+)_c.dat')
+measurement_files = {}
+maximum = []
+echo_time = []
+echo_time_fit = np.arange(0, 30, 0.001)
 
-## PLOT FID, SE together
-Fr_FID, Re_FID, Im_FID = create_spectrum(Time_FID, Re_td_fid_short, 0, False)
-Fr_SE, Re_SE, Im_SE = create_spectrum(Time_SE, Re_td_se_short, 0, False)
+for filename in os.listdir(parent_directory_se):
+    Time, Re_short, _, _, _, _ = full_analysis(parent_directory_se, filename)
+    measurement_files[filename] = {'Time': Time, 'Re': Re_short}
+    maximum.append(max(Re_short))
+    match = int(pattern_SE.search(filename).group(1))
+    echo_time.append(match)
 
-Amp_FID = calculate_amplitude(Re_FID, Im_FID)
-Amp_SE = calculate_amplitude(Re_SE, Im_SE)
+p1 = [10, 6, 1] # Initial guess
+popt1, _ = curve_fit(gauss1, echo_time, maximum, p0=p1)
+fitting_line = gauss1(echo_time_fit, *popt1)
+extrapolation = fitting_line[0]
+
+# plt.plot(echo_time_fit, fitting_line, 'k--')
+# plt.plot(echo_time, maximum, 'bo')
+# plt.plot(0, extrapolation, 'ro')
+# plt.show()
 
 
+def build_up_fid(Time, Data, A):
+    # Normalize FID to the amplitude A
+    # 1. Cut the FID between 10 and 18 microsec
+    start = 8
+    finish = 15
 
+    Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
+    Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
 
+    # Fit the small part of the FID with gauss function with restricted amplitude
+    popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
+    Data_built = gauss1(Time, A, *popt2)
+
+    # # Fit the small part of the FID with polynom (4 degree)
+    # popt, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[1, 1, 1, 1])  # Начальные приближения для остальных коэффициентов
+    # Data_built = poly1(Time, A, *popt)  # Восстановление данных
+
+    # Build-up the FID from time 0 to the first interception
+    dif_t = Time_cut[1]-Time_cut[0]
+    Time_build_from_zero = np.arange(0, start, dif_t)
+    Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
+
+    # For polynomial fitting
+    # Data_build_from_zero =  poly1(Time_build_from_zero, A, *popt) 
+
+    # Build the data from 1 interception to 2d interception
+    # Make an weighted average, where weight depends on X
+    # So, in the beginning, no FID, all built ->0
+    # In the end, only FID, no built ->1
+    # Begin - where the start, end where is the finish
+    start_idx = find_nearest(Time, start)
+    finish_idx = find_nearest(Time, finish)
+    Time_build_middle = Time[start_idx+1:finish_idx]
+    length = len(Time_build_middle)
+    data_fid = Data[start_idx+1:finish_idx]
+    data_built = Data_built[start_idx+1:finish_idx]
+    weight = np.linspace(0, 1, length)
+
+    Data_build_middle = weight * data_fid + (1 - weight) * data_built
+
+    # Build the data from 2d interception until the end
+    Time_build_end  = Time[finish_idx+1:]
+    Data_build_end   = Data[finish_idx+1:]
+
+    Time_build_full = np.concatenate((Time_build_from_zero,Time_build_middle, Time_build_end))
+    Data_build_full  = np.concatenate((Data_build_from_zero,Data_build_middle, Data_build_end))
+
+    return Time_build_full, Data_build_full, Data_built
+
+A_se = extrapolation
+Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_FID, Re_td_fid_short, A_se)
+Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, False)
+M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
+print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
+
+df = pd.DataFrame({'Time' : Time_build_full_se_r, 'Re': Re_build_full_se})
+df.to_csv("SE_build_up.dat", sep ='\t', index = 'none')
+
+# PLOT 
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+ax1.plot(Time_FID, Re_td_fid_short, 'r', label='FID original')
+ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
+ax1.set_xlim(-5, 80)
+ax1.set_title('c)', loc='left')
+ax1.set_xlabel('Time, μs')
+ax1.set_ylabel('Amplitude, a.u.')
+ax1.legend()
+
+ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
+ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
+ax2.set_xlim(-0.3,0.3)
+ax2.set_title('d)', loc='left')
+ax2.set_xlabel('Frequency, MHz')
+ax2.set_ylabel('Intensity, a.u.')
+ax2.legend()
+
+plt.tight_layout()
+plt.show()
 
 # #plot FID, MSE and SE REAL
 # fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))

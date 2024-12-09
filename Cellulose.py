@@ -169,11 +169,11 @@ def calculate_apodization(Real, Freq):
 
     Real_apod = Real * apodization_function_s
 
-    plt.plot(Freq, Real, 'r', label = 'Original')
-    plt.plot(Freq, apodization_function_s, 'k--', label = 'Apodization')
-    plt.plot(Freq, Real_apod, 'b', label = 'Apodized')
-    plt.legend()
-    plt.show
+    # plt.plot(Freq, Real, 'r', label = 'Original')
+    # plt.plot(Freq, apodization_function_s, 'k--', label = 'Apodization')
+    # plt.plot(Freq, Real_apod, 'b', label = 'Apodized')
+    # plt.legend()
+    # plt.show()
     
     return Real_apod
 
@@ -250,9 +250,9 @@ def create_spectrum(Time, Real, Imaginary, correct):
     _, Re, Im = simple_baseline_correction(FFT)
 
     # 9. Apodization
-    #Real_apod = calculate_apodization(Re, Frequency)
+    Real_apod = calculate_apodization(Re, Frequency)
 
-    return Frequency, Re, Im
+    return Frequency, Real_apod, Im
 
 def adjust_spectrum (Time, Re, Im):
     Frequency, Real, _ = create_spectrum(Time, Re, Im, False)
@@ -511,8 +511,7 @@ for filename1, filename2 in zip(measurement_files, baseline):
     match = pattern3.search(filename1)
     file_key = match.group(1)
 
-#     ax1.plot(Time_cut, Amp_re_cut, label=file_key, color=color)
-
+# ax1.plot(Time_cut, Amp_re_cut, label=file_key, color=color)
 # ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
 # ax1.set_xlim(-5, 80)
 # ax1.legend(title="Echo time in μs")
@@ -538,8 +537,11 @@ extrapolation = fitting_line[0]
 def build_up_fid(Time, Data, A):
     # Normalize FID to the amplitude A
     # 1. Cut the FID between 10 and 18 microsec
-    Time_cut    = Time[find_nearest(Time, 10):find_nearest(Time, 20)]
-    Data_cut    = Data[find_nearest(Time, 10):find_nearest(Time, 20)]
+    start = 10
+    finish = 20
+
+    Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
+    Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
 
     # Fit the small part of the FID with gauss function with restricted amplitude
     popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
@@ -549,29 +551,9 @@ def build_up_fid(Time, Data, A):
     # popt, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[1, 1, 1, 1])  # Начальные приближения для остальных коэффициентов
     # Data_built = poly1(Time, A, *popt)  # Восстановление данных
 
-    # Find intersections between FID original and build
-    diff = Data_built - Data
-    sign_changes = np.where(np.diff(np.sign(diff)))[0]
-    intersection_times = []
-    intersection_amps = []
-    intersection_idxs = []
-
-    for idx in sign_changes:
-        t1, t2 = Time[idx], Time[idx + 1]
-        y1, y2 = diff[idx], diff[idx + 1]
-        t_intersection = t1 - y1 * (t2 - t1) / (y2 - y1)
-        intersection_times.append(t_intersection)
-        amp_intersection = Data_built[idx] + (Data_built[idx + 1] - Data_built[idx]) * (t_intersection - t1) / (t2 - t1)
-        intersection_amps.append(amp_intersection)
-        intersection_idxs.append(idx)
-
-    plt.plot(Time, Data_built, 'r')
-    plt.plot(Time, Data, 'b')
-    plt.plot(intersection_times, intersection_amps, '.k')
-    plt.show
-
     # Build-up the FID from time 0 to the first interception
-    Time_build_from_zero = np.arange(0, intersection_times[0], 0.1)
+    dif_t = Time_cut[1]-Time_cut[0]
+    Time_build_from_zero = np.arange(0, start, dif_t)
     Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
 
     # For polynomial fitting
@@ -581,18 +563,20 @@ def build_up_fid(Time, Data, A):
     # Make an weighted average, where weight depends on X
     # So, in the beginning, no FID, all built ->0
     # In the end, only FID, no built ->1
-    # Begin - where the first intercetion, end where is the last intersection
-    Time_build_middle = Time[intersection_idxs[0]+1:intersection_idxs[1]]
+    # Begin - where the start, end where is the finish
+    start_idx = find_nearest(Time, start)
+    finish_idx = find_nearest(Time, finish)
+    Time_build_middle = Time[start_idx+1:finish_idx]
     length = len(Time_build_middle)
-    data_fid = Data[intersection_idxs[0]+1:intersection_idxs[1]]
-    data_built = Data_built[intersection_idxs[0]+1:intersection_idxs[1]]
+    data_fid = Data[start_idx+1:finish_idx]
+    data_built = Data_built[start_idx+1:finish_idx]
     weight = np.linspace(0, 1, length)
 
     Data_build_middle = weight * data_fid + (1 - weight) * data_built
 
     # Build the data from 2d interception until the end
-    Time_build_end  = Time[intersection_idxs[1]+1:]
-    Data_build_end   = Data[intersection_idxs[1]+1:]
+    Time_build_end  = Time[finish_idx+1:]
+    Data_build_end   = Data[finish_idx+1:]
 
     Time_build_full = np.concatenate((Time_build_from_zero,Time_build_middle, Time_build_end))
     Data_build_full  = np.concatenate((Data_build_from_zero,Data_build_middle, Data_build_end))
