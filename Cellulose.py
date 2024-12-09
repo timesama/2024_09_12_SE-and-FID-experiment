@@ -6,6 +6,39 @@ from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 import os, re
 
+
+# Find nearest value in array
+def find_nearest(array, value):
+    idx = (np.abs(np.asarray(array) - value)).argmin()
+    return idx
+
+# Gaussian functions
+def gauss(x, A, mu, sigma):
+    return A * np.exp(-(x - mu)**2 / (2 * sigma**2))
+
+def gauss1(x, A, sigma, y0):
+    return A * np.exp(-x**2 / (2 * sigma**2)) + y0
+
+def gauss2(amplitude):
+    return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
+
+#Polynom functions
+def poly1(x, A, c, g):
+    return A +  c * x**2 + g * x**4
+
+def poly2(amplitude):
+    return lambda x, c, g: poly1(x, amplitude, c, g)
+
+# Exp function
+def decaying_exponential(x, a, b, c):
+    return a * np.exp(-x/b) + c
+
+# Read data from file
+def read_data(file_path):
+    data = np.loadtxt(file_path)
+    return data[:, 0], data[:, 1], data[:, 2]
+
+# Calculate frequency from time
 def calculate_frequency_scale(Time):
     numberp = len(Time)
 
@@ -18,7 +51,12 @@ def calculate_frequency_scale(Time):
 
     return Freq
 
-def time_domain_phase(Real, Imaginary):
+# Calculate amplitude
+def calculate_amplitude(real, imaginary):
+    return np.sqrt(real**2 + imaginary**2)
+
+# Adjust phase
+def adjust_phase(Real, Imaginary):
     delta = np.zeros(360)
     
     for phi in range(360):
@@ -39,6 +77,7 @@ def time_domain_phase(Real, Imaginary):
 
     return Re, Im
 
+# Adjust frequency
 def adjust_frequency(Frequency, Re, Im):
     # Create complex FID
     Fid_unshifted = np.array(Re + 1j * Im)
@@ -71,82 +110,7 @@ def adjust_frequency(Frequency, Re, Im):
 
     return Re_shifted, Im_shifted
 
-# Find nearest value in array
-def find_nearest(array, value):
-    idx = (np.abs(np.asarray(array) - value)).argmin()
-    return idx
-
-# Gaussian functions
-def gauss(x, A, mu, sigma):
-    return A * np.exp(-(x - mu)**2 / (2 * sigma**2))
-
-def gauss1(x, A, sigma, y0):
-    return A * np.exp(-x**2 / (2 * sigma**2)) + y0
-
-def gauss2(amplitude):
-    return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
-
-def poly1(x, A, c, g):
-    return A +  c * x**2 + g * x**4
-
-def poly2(amplitude):
-    return lambda x, c, g: poly1(x, amplitude, c, g)
-
-def decaying_exponential(x, a, b, c):
-    return a * np.exp(-x/b) + c
-
-# Read data from file
-def read_data(file_path):
-    data = np.loadtxt(file_path)
-    return data[:, 0], data[:, 1], data[:, 2]
-
-# Calculate amplitude
-def calculate_amplitude(real, imaginary):
-    return np.sqrt(real**2 + imaginary**2)
-
-def frequency_domain_analysis(FFT, Frequency):
-
-    # 8. Simple baseline
-    _, Re, _ = simple_baseline_correction(FFT)
-
-    # 9. Apodization
-    Real_apod = calculate_apodization(Re, Frequency)
-
-    # 10. M2 & T2
-    M2, T2 = calculate_M2(Real_apod, Frequency)
-
-    return M2, T2
-
-def calculate_M2(FFT_real, Frequency):
-    # Take the integral of the REAL PART OF FFT by counts
-    Integral = np.trapz(np.real(FFT_real))
-    
-    # Normalize FFT to the Integral value
-    Fur_normalized = np.real(FFT_real) / Integral
-    
-    # Calculate the integral of normalized FFT to receive 1
-    Integral_one = np.trapz(Fur_normalized)
-    
-    # Multiplication (the power ^n will give the nth moment (here it is n=2)
-    Multiplication = (Frequency ** 2) * Fur_normalized
-    
-    # Calculate the integral of multiplication - the nth moment
-    # The (2pi)^2 are the units to transform from rad/sec to Hz
-    # ppbly it should be (2pi)^n for generalized moment calculation
-    M2 = (np.trapz(Multiplication)) * 4 * np.pi ** 2
-    
-    # Check the validity
-    if np.abs(np.mean(Multiplication[0:10])) > 10 ** (-6):
-        print('Apodization is wrong!')
-
-    if M2 < 0:
-        M2 = 0
-        T2 = 0
-    else:
-        T2 = np.sqrt(2/M2)
-    
-    return M2, T2
-
+# Correct spectra with baseline
 def simple_baseline_correction(FFT):
     twentyperc = int(round(len(FFT) * 0.02))
     Baseline = np.mean(np.real(FFT[:twentyperc]))
@@ -156,7 +120,8 @@ def simple_baseline_correction(FFT):
     Amp = calculate_amplitude(Re, Im)
     return Amp, Re, Im
 
-def calculate_apodization(Real, Freq):
+# Apodize spectra
+def apodization_fft(Real, Freq):
     # Find sigma at 0.1% from the max amplitude of the spectra
     Maximum = np.max(np.abs(Real))
     idx_max = np.argmax(np.abs(Real))
@@ -177,18 +142,7 @@ def calculate_apodization(Real, Freq):
     
     return Real_apod
 
-def calculate_frequency_scale(Time):
-    numberp = len(Time)
-
-    dt = Time[1] - Time[0]
-    f_range = 1 / dt
-    f_nyquist = f_range / 2
-    df = 2 * (f_nyquist / numberp)
-    Freq = np.arange(-f_nyquist, f_nyquist + df, df)
-    Freq = Freq[:-1]
-
-    return Freq
-
+# Zero filling procedure
 def add_zeros(Time, Real, Imaginary, number_of_points):
     length_diff = number_of_points - len(Time)
     amount_to_add = np.zeros(length_diff+1)
@@ -205,6 +159,7 @@ def add_zeros(Time, Real, Imaginary, number_of_points):
 
     return Time, Fid
 
+# Apodization of time Domain
 def apodization(Time, Real, Imaginary):
     Amplitude = calculate_amplitude(Real, Imaginary)
     sigma = 60
@@ -225,102 +180,13 @@ def apodization(Time, Real, Imaginary):
 
     return Re_ap, Im_ap
 
-def create_spectrum(Time, Real, Imaginary, correct):
-    number_of_points = 2**14
-    # 5. Apodize the time-domain
-    Re_ap, Im_ap = apodization(Time, Real, Imaginary)
-
-    if correct == True:
-        Fr = calculate_frequency_scale(Time)
-        Re_ph, Im_ph = time_domain_phase(Re_ap, Im_ap)
-        Re_ad, Im_ad = adjust_frequency(Fr, Re_ph, Im_ph)
-    else:
-        Re_ad = Re_ap
-        Im_ad = Im_ap
-
-    # 6. Add zeros
-    Time_zero, Fid_zero = add_zeros(Time, Re_ad, Im_ad, number_of_points)
-
-    Frequency = calculate_frequency_scale(Time_zero)
-
-    # 7. FFT
-    FFT = np.fft.fftshift(np.fft.fft(Fid_zero))
-
-    # 8. Simple baseline
-    _, Re, Im = simple_baseline_correction(FFT)
-
-    # 9. Apodization
-    Real_apod = calculate_apodization(Re, Frequency)
-
-    return Frequency, Real_apod, Im
-
-def adjust_spectrum (Time, Re, Im):
-    Frequency, Real, _ = create_spectrum(Time, Re, Im, False)
-    # shift = Frequency[np.argmax(Real)]
-    # Frequency = Frequency - shift
-    return Frequency, Real
-
-def prepare_data(parent_directory, filename, correction):
-        file_path = os.path.join(parent_directory, filename)
-        Time, Re_original, Im_original = read_data(file_path)
-
-        if correction == True:
-            Frequency = calculate_frequency_scale(Time)
-            #Correct phase
-            R_phased, I_phased = time_domain_phase(Re_original, Im_original)
-            #Adjust frequency
-            Re, Im = adjust_frequency(Frequency, R_phased, I_phased)
-            Amp = calculate_amplitude(Re, Im)
-
-            # For debug
-            # plt.plot(Time, Re_original, 'k--', label='Re original')
-            # plt.plot(Time, Im_original, 'b--', label='Im original')
-            # plt.plot(Time, R_phased, 'k.', label='Re phased')
-            # plt.plot(Time, I_phased, 'b.', label='Im phased')
-            # plt.plot(Time, Re, 'k', label='Re fr')
-            # plt.plot(Time, Im, 'b', label='Im fr')
-            # plt.plot(Time, Amp, 'r', label='Amp')
-            # plt.xlim([-5,80])
-            # plt.xlabel('Time, μs')
-            # plt.ylabel('Amplitude, a.u.')
-            # plt.legend()
-            # plt.title(filename)
-            # plt.tight_layout()
-            # plt.show()
-
-        else:
-            Re = Re_original
-            Im = Im_original
-            Amp = calculate_amplitude(Re_original, Im_original)
-
-        return Time, Re, Im, Amp
-
+# Cut the first part of the FID
 def cut_beginning(Time, Data):
     Time_plot = Time[np.argmax(Data):]
     Data_plot = Data[np.argmax(Data):]
     return Time_plot, Data_plot
 
-def analysis_SE(measurement_files, baseline, filename1, filename2, type, type_save, Re_td_fid_cut, Time_fid):
-    # read data
-    Time = np.array(measurement_files[filename1]['Time'])
-    data_measurement_files = np.array(measurement_files[filename1][type])
-    data_baseline = np.array(baseline[filename2][type])
-    # compare length
-    if len(data_measurement_files) != len(data_baseline):
-        data_baseline = data_baseline[:len(data_measurement_files)]
-    # subtract
-    difference = data_measurement_files - data_baseline
-    # save subtracted data and maximum
-    measurement_files[filename1][type_save] = difference
-
-    Time_cut, Data_cut = cut_beginning(Time, difference)
-    Data_norm = normalize_to_fid(Re_td_fid_cut, Data_cut, Time_fid, Time_cut)
-    Data_short    = reference_long_component(Time_cut, Data_cut, end= 55)
-
-    maximum.append(max(Data_short))
-
-    return maximum, Time_cut, Data_short
-
+# Normalize the data to FID at long times
 def normalize_to_fid(Fid, Data, Time_fid, Time_data):
     Mean_amp_fid_long = np.mean(Fid[find_nearest(Time_fid, 60):find_nearest(Time_fid, 70)])
     Mean_amp_dat_long = np.mean(Data[find_nearest(Time_data, 60):find_nearest(Time_data, 70)])
@@ -333,6 +199,7 @@ def normalize_to_fid(Fid, Data, Time_fid, Time_data):
     # Normalized_amp = Data * proportionality_coefficient
     return Normalized_amp
 
+# reference the long component
 def reference_long_component(Time, Component_n, end):
     # 3. Cut the ranges for fitting
     minimum = find_nearest(Time, end)
@@ -365,6 +232,130 @@ def reference_long_component(Time, Component_n, end):
 
     return Component_sub
 
+# Calculate M2
+def calculate_M2(FFT_real, Frequency):
+    # Take the integral of the REAL PART OF FFT by counts
+    Integral = np.trapz(np.real(FFT_real))
+    
+    # Normalize FFT to the Integral value
+    Fur_normalized = np.real(FFT_real) / Integral
+    
+    # Calculate the integral of normalized FFT to receive 1
+    Integral_one = np.trapz(Fur_normalized)
+    
+    # Multiplication (the power ^n will give the nth moment (here it is n=2)
+    Multiplication = (Frequency ** 2) * Fur_normalized
+    
+    # Calculate the integral of multiplication - the nth moment
+    # The (2pi)^2 are the units to transform from rad/sec to Hz
+    # ppbly it should be (2pi)^n for generalized moment calculation
+    M2 = (np.trapz(Multiplication)) * 4 * np.pi ** 2
+    
+    # Check the validity
+    if np.abs(np.mean(Multiplication[0:10])) > 10 ** (-6):
+        print('Apodization is wrong!')
+
+    if M2 < 0:
+        M2 = 0
+        T2 = 0
+    else:
+        T2 = np.sqrt(2/M2)
+    
+    return M2, T2
+
+# Global functions
+# Create spectra with option for corrections
+def freq_domain_correction(Time, Real, Imaginary, correct):
+    number_of_points = 2**14
+    # 5. Apodize the time-domain
+    Re_ap, Im_ap = apodization(Time, Real, Imaginary)
+
+    if correct == True:
+        Fr = calculate_frequency_scale(Time)
+        Re_ph, Im_ph = adjust_phase(Re_ap, Im_ap)
+        Re_ad, Im_ad = adjust_frequency(Fr, Re_ph, Im_ph)
+    else:
+        Re_ad = Re_ap
+        Im_ad = Im_ap
+
+    # 6. Add zeros
+    Time_zero, Fid_zero = add_zeros(Time, Re_ad, Im_ad, number_of_points)
+
+    Frequency = calculate_frequency_scale(Time_zero)
+
+    # 7. FFT
+    FFT = np.fft.fftshift(np.fft.fft(Fid_zero))
+
+    # 8. Simple baseline
+    _, Re, Im = simple_baseline_correction(FFT)
+
+    # 9. Apodization
+    Real_apod = apodization_fft(Re, Frequency)
+
+    return Frequency, Real_apod, Im
+
+# Create NMR signal with option for corrections
+def time_domain_correction(parent_directory, filename, correction):
+        file_path = os.path.join(parent_directory, filename)
+        Time, Re_original, Im_original = read_data(file_path)
+
+        if correction == True:
+            Frequency = calculate_frequency_scale(Time)
+            #Correct phase
+            R_phased, I_phased = adjust_phase(Re_original, Im_original)
+            #Adjust frequency
+            Re, Im = adjust_frequency(Frequency, R_phased, I_phased)
+            Amp = calculate_amplitude(Re, Im)
+
+            # For debug
+            # plt.plot(Time, Re_original, 'k--', label='Re original')
+            # plt.plot(Time, Im_original, 'b--', label='Im original')
+            # plt.plot(Time, R_phased, 'k.', label='Re phased')
+            # plt.plot(Time, I_phased, 'b.', label='Im phased')
+            # plt.plot(Time, Re, 'k', label='Re fr')
+            # plt.plot(Time, Im, 'b', label='Im fr')
+            # plt.plot(Time, Amp, 'r', label='Amp')
+            # plt.xlim([-5,80])
+            # plt.xlabel('Time, μs')
+            # plt.ylabel('Amplitude, a.u.')
+            # plt.legend()
+            # plt.title(filename)
+            # plt.tight_layout()
+            # plt.show()
+
+        else:
+            Re = Re_original
+            Im = Im_original
+            Amp = calculate_amplitude(Re_original, Im_original)
+
+        return Time, Re, Im, Amp
+
+# General analysis of SE
+def analysis_SE(measurement_files, baseline, filename1, filename2, type, type_save, Re_td_fid_cut, Time_fid):
+    # read data
+    Time = np.array(measurement_files[filename1]['Time'])
+    data_measurement_files = np.array(measurement_files[filename1][type])
+    data_baseline = np.array(baseline[filename2][type])
+    # compare length
+    if len(data_measurement_files) != len(data_baseline):
+        data_baseline = data_baseline[:len(data_measurement_files)]
+    # subtract
+    difference = data_measurement_files - data_baseline
+    # save subtracted data and maximum
+    measurement_files[filename1][type_save] = difference
+
+    Time_cut, Data_cut = cut_beginning(Time, difference)
+    Data_norm = normalize_to_fid(Re_td_fid_cut, Data_cut, Time_fid, Time_cut)
+    Data_short    = reference_long_component(Time_cut, Data_cut, end= 55)
+
+    maximum.append(max(Data_short))
+
+    return maximum, Time_cut, Data_short
+
+# general analysis for FID, MSE and SE
+
+
+
 # Directory and pattern setup
 parent_directory = os.path.join(os.getcwd(), 'SE_Cycle')
 pattern = re.compile(r'Cellulose.*.dat$')
@@ -391,13 +382,13 @@ for filename in os.listdir(parent_directory):
     # FID
     if pattern_FID.match(filename):
         correction = True
-        Time_fid, Re_td_fid, Im_td_fid, Amp_td_fid = prepare_data(parent_directory, filename, correction)
+        Time_fid, Re_td_fid, Im_td_fid, Amp_td_fid = time_domain_correction(parent_directory, filename, correction)
         Time_fid = Time_fid - 2
 
     # MSE
     elif pattern_MSE.match(filename):
         correction = True
-        Time_mse, Re_td_mse, Im_td_mse, Amp_td_mse = prepare_data(parent_directory, filename, correction)
+        Time_mse, Re_td_mse, Im_td_mse, Amp_td_mse = time_domain_correction(parent_directory, filename, correction)
         # UNFORTUNATELY I recorded a very long MSE, my bad
         length_to_cut = len(Time_fid)
         Time_mse      = Time_mse[:length_to_cut]
@@ -408,12 +399,12 @@ for filename in os.listdir(parent_directory):
     # Empty
     elif pattern_FID_empty.match(filename):
         correction = False
-        Time_fid_empty, Re_td_fid_empty, Im_td_fid_empty, Amp_td_fid_empty = prepare_data(parent_directory, filename, correction)
+        Time_fid_empty, Re_td_fid_empty, Im_td_fid_empty, Amp_td_fid_empty = time_domain_correction(parent_directory, filename, correction)
     
     # Water
     elif pattern_FID_water.match(filename):
         correction = True
-        Time_water, Re_td_water, Im_td_water, Amp_td_water = prepare_data(parent_directory, filename, correction)
+        Time_water, Re_td_water, Im_td_water, Amp_td_water = time_domain_correction(parent_directory, filename, correction)
         # UNFORTUNATELY I recorded a very long FID for water, my bad
         length_to_cut = len(Time_fid)
         Time_water      = Time_water[:length_to_cut]
@@ -424,24 +415,25 @@ for filename in os.listdir(parent_directory):
     # SE
     elif pattern.match(filename):
         correction = True
-        Time, Re, Im, Amp = prepare_data(parent_directory, filename, correction)
+        Time, Re, Im, Amp = time_domain_correction(parent_directory, filename, correction)
         measurement_files[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
 
     # SE empty
     elif pattern2.match(filename):
-        Time, Re, Im, Amp = prepare_data(parent_directory, filename, correction)
+        Time, Re, Im, Amp = time_domain_correction(parent_directory, filename, correction)
         baseline[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
 
-# Subtract empty from SE & cut the beginning for AMPLITUDES 
+# Water
+Re_td_water_sub    = Re_td_water - Re_td_fid_empty
+
+# Set names for empty and RE from SE 
 filename_for_plot_se = 'Cellulose_500scnas_12gain_ 9_c.dat'
 filename_for_plot_empty = 'Empty_500scnas_12gain_ 9_c.dat'
 Time_se = np.array(measurement_files[filename_for_plot_se]['Time'])
 
 # Subtract empty from FID cellulose, FID water and MSE for REAL && IMAG
 Re_td_fid_sub      = Re_td_fid - Re_td_fid_empty
-Re_td_water_sub    = Re_td_water - Re_td_fid_empty
 Re_td_mse_sub      = Re_td_mse - Re_td_fid_empty
-# Subtract empty from SE 
 Re_td_se_sub = np.array(measurement_files[filename_for_plot_se]['Re']) - np.array(baseline[filename_for_plot_empty]['Re'])
 
 # Cut the beginning for amplitudes and real for FID and MSE
@@ -450,18 +442,19 @@ Time_mse, Re_td_mse_cut     = cut_beginning(Time_mse, Re_td_mse_sub)
 Time_se,  Re_td_se_cut      = cut_beginning(Time_se, Re_td_se_sub)
 
 # Normalize RE of SE and MSE to FID's 60-70 microsec
+Re_td_fid_norm = normalize_to_fid(Re_td_fid_cut, Re_td_fid_cut, Time_fid, Time_fid)
 Re_td_se_norm = normalize_to_fid(Re_td_fid_cut, Re_td_se_cut, Time_fid, Time_se)
 Re_td_mse_norm = normalize_to_fid(Re_td_fid_cut, Re_td_mse_cut, Time_fid, Time_mse)
 
 # Subtract the long component for FID, SE and MSE REAL & IMAG
-Re_td_fid_short    = reference_long_component(Time_fid, Re_td_fid_cut, end= 55)
+Re_td_fid_short    = reference_long_component(Time_fid, Re_td_fid_norm, end= 55)
 Re_td_mse_short    = reference_long_component(Time_mse, Re_td_mse_norm, end= 55)
 Re_td_se_short     = reference_long_component(Time_se, Re_td_se_norm, end= 55)
 
 ## PLOT FID, SE and MSE all together
-Fr_FID, Re_FID = adjust_spectrum(Time_fid, Re_td_fid_short, 0)
-Fr_MSE, Re_MSE = adjust_spectrum(Time_mse, Re_td_mse_short , 0)
-Fr_SE, Re_SE = adjust_spectrum(Time_se, Re_td_se_short, 0)
+Fr_FID, Re_FID,_ = freq_domain_correction(Time_fid, Re_td_fid_short, 0, False)
+Fr_MSE, Re_MSE,_ = freq_domain_correction(Time_mse, Re_td_mse_short , 0, False)
+Fr_SE, Re_SE,_ = freq_domain_correction(Time_se, Re_td_se_short, 0, False)
 
 # 10. M2 & T2
 M2_FID, T2_FID = calculate_M2(Re_FID, Fr_FID)
@@ -472,7 +465,7 @@ M2_FID, T2_FID = calculate_M2(Re_MSE, Fr_MSE)
 print(f'MSE\nM2: {M2_FID}\nT2: {T2_FID}')
 
 #### SE part
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
+# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
 cmap = plt.get_cmap('winter')
 
 # Processing SE data
@@ -489,13 +482,13 @@ for filename1, filename2 in zip(measurement_files, baseline):
     match = pattern3.search(filename1)
     file_key = match.group(1)
 
-    ax1.plot(Time_cut, Amp_re_cut, label=file_key, color=color)
-ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
-ax1.set_xlim(-5, 80)
-ax1.legend(title="Echo time in μs")
-ax1.set_title('a)', loc='left')
-ax1.set_xlabel('Time, μs')
-ax1.set_ylabel('Amplitude')
+#     ax1.plot(Time_cut, Amp_re_cut, label=file_key, color=color)
+# ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
+# ax1.set_xlim(-5, 80)
+# ax1.legend(title="Echo time in μs")
+# ax1.set_title('a)', loc='left')
+# ax1.set_xlabel('Time, μs')
+# ax1.set_ylabel('Amplitude')
 
 # Gaussian fit for SE maximum amplitude
 p1 = [10, 6, 1] # Initial guess
@@ -505,37 +498,42 @@ extrapolation = fitting_line[0]
 
 # Show SE decays and maxima fitting
 
-ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
-ax2.plot(echo_time_fit, fitting_line, 'r--', label='Gaussian Fit')
-ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
-ax2.set_xlabel('Echo time, μs')
-ax2.set_ylabel('Amplitude max')
-ax2.set_title('b)', loc='left')
-plt.tight_layout()
-plt.show()
+# ax2.plot(echo_time, maximum, 'o', label='Max SE Amplitude')
+# ax2.plot(echo_time_fit, fitting_line, 'r--', label='Gaussian Fit')
+# ax2.plot(0, extrapolation, 'ro', label='Exrapolated to time=0')
+# ax2.set_xlabel('Echo time, μs')
+# ax2.set_ylabel('Amplitude max')
+# ax2.set_title('b)', loc='left')
+# plt.tight_layout()
+# plt.show()
 
 
 def build_up_fid(Time, Data, A):
     # Normalize FID to the amplitude A
     # 1. Cut the FID between 10 and 18 microsec
-    start = 15
+    start = 10
     finish = 20
 
     Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
     Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
 
-    # Fit the small part of the FID with gauss function with restricted amplitude
-    popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
-    Data_built = gauss1(Time, A, *popt2)
+    # # Fit the small part of the FID with gauss function with restricted amplitude
+    # popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
+    # Data_built = gauss1(Time, A, *popt2)
 
     # # Fit the small part of the FID with polynom (4 degree)
-    # popt, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[1, 1, 1, 1])  # Начальные приближения для остальных коэффициентов
-    # Data_built = poly1(Time, A, *popt)  # Восстановление данных
+    # popt2, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[10, 0.005])  # Начальные приближения для остальных коэффициентов
+    # Data_built = poly1(Time, A, *popt2)  # Восстановление данных
+
+    popt2, _ = curve_fit(poly1, Time_cut, Data_cut)
+    Data_built = poly1(Time, *popt2)  # Восстановление данных
 
     # Build-up the FID from time 0 to the first interception
     dif_t = Time_cut[1]-Time_cut[0]
     Time_build_from_zero = np.arange(0, start, dif_t)
-    Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
+    # Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
+    Data_build_from_zero = gauss1(Time_build_from_zero, *popt2)
+
 
     # For polynomial fitting
     # Data_build_from_zero =  poly1(Time_build_from_zero, A, *popt) 
@@ -562,6 +560,10 @@ def build_up_fid(Time, Data, A):
     Time_build_full = np.concatenate((Time_build_from_zero,Time_build_middle, Time_build_end))
     Data_build_full  = np.concatenate((Data_build_from_zero,Data_build_middle, Data_build_end))
 
+    plt.plot(Time, Data_built, 'b')
+    plt.plot(Time, Data, 'r')
+    plt.show()
+
     return Time_build_full, Data_build_full, Data_built
 
 # Build up FIDS from SE/MSE for Real
@@ -572,8 +574,8 @@ Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_
 Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse)
 
 # Calculate M2 of build-up Fids real
-Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, False)
-Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, _    = create_spectrum(Time_build_full_mse_r, Re_build_full_mse, 0, True)
+Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = freq_domain_correction(Time_build_full_se_r, Re_build_full_se, 0, False)
+Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, _    = freq_domain_correction(Time_build_full_mse_r, Re_build_full_mse, 0, True)
 
 M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
 M2_FID_MSE_r, T2_FID_MSE_r  = calculate_M2(Real_buildupfid_MSE_r, Frequency_buildupfid_MSE_r)
@@ -583,27 +585,27 @@ print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
 
 # PLOT all figures here
 
-#plot FID, MSE and SE REAL
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-ax1.plot(Time_mse, Re_td_mse_short, 'k', label='MSE')
-ax1.plot(Time_se, Re_td_se_short, 'b', label='SE')
-ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
-ax1.set_xlim(-5, 80)
-ax1.set_title('a) NMR Signal', loc='left')
-ax1.set_xlabel('Time, μs')
-ax1.set_ylabel('Amplitude, a.u.')
-ax1.legend()
+# #plot FID, MSE and SE REAL
+# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+# ax1.plot(Time_mse, Re_td_mse_short, 'k', label='MSE')
+# ax1.plot(Time_se, Re_td_se_short, 'b', label='SE')
+# ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID')
+# ax1.set_xlim(-5, 80)
+# ax1.set_title('a) NMR Signal', loc='left')
+# ax1.set_xlabel('Time, μs')
+# ax1.set_ylabel('Amplitude, a.u.')
+# ax1.legend()
 
-ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
-ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
-ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
-ax2.set_xlim(-0.15,0.15)
-ax2.set_title('b) FFT spectra', loc='left')
-ax2.set_xlabel('Frequency, MHz')
-ax2.set_ylabel('Intensity, a.u.')
-ax2.legend()
-plt.tight_layout()
-plt.show()
+# ax2.plot(Fr_MSE, Re_MSE, 'k', label='MSE')
+# ax2.plot(Fr_SE, Re_SE, 'b', label='SE')
+# ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
+# ax2.set_xlim(-0.15,0.15)
+# ax2.set_title('b) FFT spectra', loc='left')
+# ax2.set_xlabel('Frequency, MHz')
+# ax2.set_ylabel('Intensity, a.u.')
+# ax2.legend()
+# plt.tight_layout()
+# plt.show()
 
 
 ## Build-up decys and spectra
