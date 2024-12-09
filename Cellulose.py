@@ -1,5 +1,6 @@
 # This Python file uses the following encoding: utf-8
 import numpy as np
+import pandas as pd 
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
@@ -85,11 +86,11 @@ def gauss1(x, A, sigma, y0):
 def gauss2(amplitude):
     return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
 
-def poly1(x, A, b, c, d, g):
-    return A + b * x + c * x**2 + d * x**3 + g * x**4
+def poly1(x, A, c, g):
+    return A +  c * x**2 + g * x**4
 
 def poly2(amplitude):
-    return lambda x, b, c, d, g: poly1(x, amplitude, b, c, d, g)
+    return lambda x, c, g: poly1(x, amplitude, c, g)
 
 def decaying_exponential(x, a, b, c):
     return a * np.exp(-x/b) + c
@@ -606,7 +607,7 @@ Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_
 Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse)
 
 # Calculate M2 of build-up Fids real
-Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, True)
+Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_build_full_se_r, Re_build_full_se, 0, False)
 Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, _    = create_spectrum(Time_build_full_mse_r, Re_build_full_mse, 0, True)
 
 M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
@@ -637,6 +638,12 @@ ax2.legend()
 
 plt.tight_layout()
 plt.show()
+
+
+df = pd.DataFrame({'Time' : Time_build_full_mse_r, 'Re': Re_build_full_mse})
+df.to_csv("MSE_build_up.dat", sep ='\t', index = 'none')
+
+
 
 # ## Difference FID and SE real components
 
