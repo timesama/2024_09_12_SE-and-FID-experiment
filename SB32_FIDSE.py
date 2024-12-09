@@ -399,7 +399,7 @@ def full_analysis(parent_directory, filename):
     return Time, Re_td_short, Freq, Re_spectra, Im_spectra, Amp_spectra
 
 # Read data
-parent_directory = r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experiment\SB32'
+parent_directory = r'.\SB32'
 
 SE_file = r'SE_Cellulose_ 6_c.dat'
 FID_file = r'FID_Cellulose_ 6_c.dat'
@@ -411,7 +411,7 @@ Time_SE, Re_td_se_short, Fr_SE, Re_SE, Im_SE, Amp_SE = full_analysis(parent_dire
 Time_FID, Re_td_fid_short, Fr_FID, Re_FID, Im_FID, Amp_FID = full_analysis(parent_directory, FID_file)
 
 # Calculate the maximum from SE's
-parent_directory_se = r'C:\Mega\NMR\003_Temperature\2024_09_12_SE and FID experiment\SB32\cycle_SE'
+parent_directory_se = r'.\SB32\cycle_SE'
 pattern_SE = re.compile(r'SE_Cellulose_ ([0-9]+)_c.dat')
 measurement_files = {}
 maximum = []
@@ -429,12 +429,6 @@ p1 = [10, 6, 1] # Initial guess
 popt1, _ = curve_fit(gauss1, echo_time, maximum, p0=p1)
 fitting_line = gauss1(echo_time_fit, *popt1)
 extrapolation = fitting_line[0]
-
-# plt.plot(echo_time_fit, fitting_line, 'k--')
-# plt.plot(echo_time, maximum, 'bo')
-# plt.plot(0, extrapolation, 'ro')
-# plt.show()
-
 
 def build_up_fid(Time, Data, A):
     # Normalize FID to the amplitude A
@@ -491,23 +485,34 @@ Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = create_spectrum(Time_b
 M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
 print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
 
+
+### Save build-up FID for export
 df = pd.DataFrame({'Time' : Time_build_full_se_r, 'Re': Re_build_full_se})
 df.to_csv("SE_build_up.dat", sep ='\t', index = 'none')
 
-# PLOT 
+###### PLOT all the figures here
+# Echo time and Maximum of SE fitting
+plt.plot(echo_time_fit, fitting_line, 'k--',label = 'Gaus fitting')
+plt.plot(echo_time, maximum, 'bo', label='SE Max amplitude')
+plt.plot(0, extrapolation, 'ro', label = 'Extrapolated Amplitude')
+plt.xlabel('Echo time, μs')
+plt.ylabel('Amplitude, a.u.')
+plt.show()
+
+## Original and build-up FID
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
 ax1.plot(Time_FID, Re_td_fid_short, 'r', label='FID original')
 ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
 ax1.set_xlim(-5, 80)
-ax1.set_title('c)', loc='left')
+ax1.set_title('a) NMR Signal: FID and SE', loc='left')
 ax1.set_xlabel('Time, μs')
 ax1.set_ylabel('Amplitude, a.u.')
 ax1.legend()
 
-ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
-ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
+ax2.plot(Fr_FID, Re_FID, 'r', label='FID original')
+ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='FID build-up from SE')
 ax2.set_xlim(-0.3,0.3)
-ax2.set_title('d)', loc='left')
+ax2.set_title('b) build-up FID and original FID spectra', loc='left')
 ax2.set_xlabel('Frequency, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 ax2.legend()
@@ -515,41 +520,41 @@ ax2.legend()
 plt.tight_layout()
 plt.show()
 
-# #plot FID, MSE and SE REAL
-# fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))
-# ax1.plot(Time_SE, Re_td_se_short, 'b', label='SE')
-# ax1.plot(Time_FID, Re_td_fid_short, 'r', label='FID')
-# ax1.set_xlim(-5, 80)
-# ax1.set_title('FID and SE decays', loc='left')
-# ax1.set_xlabel('Time, μs')
-# ax1.set_ylabel('Amplitude, a.u.')
-# ax1.legend()
+#plot FID and SE REAL
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))
+ax1.plot(Time_SE, Re_td_se_short, 'b', label='SE')
+ax1.plot(Time_FID, Re_td_fid_short, 'r', label='FID')
+ax1.set_xlim(-5, 80)
+ax1.set_title('FID and SE decays', loc='left')
+ax1.set_xlabel('Time, μs')
+ax1.set_ylabel('Amplitude, a.u.')
+ax1.legend()
 
-# ax2.plot(Fr_FID, Re_FID, 'b', label='Re FID')
-# ax2.plot(Fr_SE, Re_SE, 'r', label='Re SE')
-# ax2.set_xlim(-0.2, 0.2)
-# ax2.set_title('FFT FID and SE', loc='left')
-# ax2.set_xlabel('Frequency, MHz')
-# ax2.set_ylabel('Amplitude, a.u.')
-# ax2.legend()
+ax2.plot(Fr_FID, Re_FID, 'b', label='Re FID')
+ax2.plot(Fr_SE, Re_SE, 'r', label='Re SE')
+ax2.set_xlim(-0.2, 0.2)
+ax2.set_title('FFT FID and SE', loc='left')
+ax2.set_xlabel('Frequency, MHz')
+ax2.set_ylabel('Amplitude, a.u.')
+ax2.legend()
 
 
-# ax3.plot(Fr_FID, Re_FID, 'r', label='FID Re')
-# ax3.plot(Fr_FID, Im_FID, 'b', label='FID Im')
-# ax3.plot(Fr_FID, Amp_FID, 'k', label='FID Amp')
-# ax3.set_xlim(-0.4,0.4)
-# ax3.set_title('FFT FID', loc='left')
-# ax2.set_xlabel('Frequency, MHz')
-# ax3.set_ylabel('Intensity, a.u.')
-# ax3.legend()
+ax3.plot(Fr_FID, Re_FID, 'r', label='FID Re')
+ax3.plot(Fr_FID, Im_FID, 'b', label='FID Im')
+ax3.plot(Fr_FID, Amp_FID, 'k', label='FID Amp')
+ax3.set_xlim(-0.4,0.4)
+ax3.set_title('FFT FID', loc='left')
+ax2.set_xlabel('Frequency, MHz')
+ax3.set_ylabel('Intensity, a.u.')
+ax3.legend()
 
-# ax4.plot(Fr_SE, Re_SE, 'r', label='SE Re')
-# ax4.plot(Fr_SE, Im_SE, 'b', label='SE Im')
-# ax4.plot(Fr_SE, Amp_SE, 'k', label='SE Amp')
-# ax4.set_xlim(-0.4,0.4)
-# ax4.set_title('FFT SE', loc='left')
-# ax4.set_xlabel('Frequency, MHz')
-# ax4.set_ylabel('Intensity, a.u.')
-# ax4.legend()
-# plt.tight_layout()
-# plt.show()
+ax4.plot(Fr_SE, Re_SE, 'r', label='SE Re')
+ax4.plot(Fr_SE, Im_SE, 'b', label='SE Im')
+ax4.plot(Fr_SE, Amp_SE, 'k', label='SE Amp')
+ax4.set_xlim(-0.4,0.4)
+ax4.set_title('FFT SE', loc='left')
+ax4.set_xlabel('Frequency, MHz')
+ax4.set_ylabel('Intensity, a.u.')
+ax4.legend()
+plt.tight_layout()
+plt.show()
