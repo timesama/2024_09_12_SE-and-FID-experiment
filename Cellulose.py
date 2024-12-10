@@ -23,11 +23,11 @@ def gauss2(amplitude):
     return lambda x, sigma, y0: gauss1(x, amplitude, sigma, y0)
 
 #Polynom functions
-def poly1(x, A, c, g):
-    return A +  c * x**2 + g * x**4
+def poly1(x, A, c, g, h):
+    return A +  c * x**2 + g * x**4 + h * x**6
 
 def poly2(amplitude):
-    return lambda x, c, g: poly1(x, amplitude, c, g)
+    return lambda x, c, g, h: poly1(x, amplitude, c, g, h)
 
 # Exp function
 def decaying_exponential(x, a, b, c):
@@ -508,35 +508,52 @@ extrapolation = fitting_line[0]
 # plt.show()
 
 
-def build_up_fid(Time, Data, A):
-    # Normalize FID to the amplitude A
-    # 1. Cut the FID between 10 and 18 microsec
-    start = 10
-    finish = 20
+def build_up_fid(Time, Data, A, function):
 
-    Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
-    Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
+    if function == 'polynom':
+        # Normalize FID to the amplitude A
+        # 1. Cut the FID between 10 and 18 microsec
+        start = 7
+        finish = 20
 
-    # # Fit the small part of the FID with gauss function with restricted amplitude
-    # popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
-    # Data_built = gauss1(Time, A, *popt2)
+        Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
+        Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
 
-    # # Fit the small part of the FID with polynom (4 degree)
-    # popt2, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[10, 0.005])  # Начальные приближения для остальных коэффициентов
-    # Data_built = poly1(Time, A, *popt2)  # Восстановление данных
+        # # Fit the small part of the FID with gauss function with restricted amplitude
+        # popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
+        # Data_built = gauss1(Time, A, *popt2)
 
-    popt2, _ = curve_fit(poly1, Time_cut, Data_cut)
-    Data_built = poly1(Time, *popt2)  # Восстановление данных
+        # # Fit the small part of the FID with polynom (4 degree)
+        popt2, _ = curve_fit(poly2(A), Time_cut, Data_cut, p0=[0.005, 0.005, 0.005])
+        Data_built = poly1(Time, A, *popt2)  # Восстановление данных
+        Data_built1 = poly1(Time_cut, A, *popt2)  # зафиченный участок для просмотра
 
-    # Build-up the FID from time 0 to the first interception
-    dif_t = Time_cut[1]-Time_cut[0]
-    Time_build_from_zero = np.arange(0, start, dif_t)
-    # Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
-    Data_build_from_zero = gauss1(Time_build_from_zero, *popt2)
+        # Build-up the FID from time 0 to the first interception
+        dif_t = Time_cut[1]-Time_cut[0]
+        Time_build_from_zero = np.arange(0, start, dif_t)
+        # Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
+        Data_build_from_zero = poly1(Time_build_from_zero, A, *popt2)
+    elif function == 'gauss':
+        # Normalize FID to the amplitude A
+        # 1. Cut the FID between 10 and 18 microsec
+        start = 7
+        finish = 18
 
+        Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
+        Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
 
-    # For polynomial fitting
-    # Data_build_from_zero =  poly1(Time_build_from_zero, A, *popt) 
+        # # Fit the small part of the FID with gauss function with restricted amplitude
+        popt2, _ = curve_fit(gauss2(A), Time_cut, Data_cut, p0=[8, 0])
+        Data_built = gauss1(Time, A, *popt2)
+        Data_built1 = gauss1(Time_cut, A, *popt2)  # зафиченный участок для просмотра
+
+        # Build-up the FID from time 0 to the first interception
+        dif_t = Time_cut[1]-Time_cut[0]
+        Time_build_from_zero = np.arange(0, start, dif_t)
+        Data_build_from_zero = gauss1(Time_build_from_zero, A, *popt2)
+    else:
+        print('No function')
+        return
 
     # Build the data from 1 interception to 2d interception
     # Make an weighted average, where weight depends on X
@@ -560,8 +577,8 @@ def build_up_fid(Time, Data, A):
     Time_build_full = np.concatenate((Time_build_from_zero,Time_build_middle, Time_build_end))
     Data_build_full  = np.concatenate((Data_build_from_zero,Data_build_middle, Data_build_end))
 
-    plt.plot(Time, Data_built, 'b')
-    plt.plot(Time, Data, 'r')
+    plt.plot(Time_cut, Data_built1, 'b')
+    plt.plot(Time, Data, 'r--')
     plt.show()
 
     return Time_build_full, Data_build_full, Data_built
@@ -570,8 +587,9 @@ def build_up_fid(Time, Data, A):
 A_se = extrapolation
 A_mse = np.max(Re_td_mse_norm)
 
-Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_short, A_se)
-Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse)
+function = 'polynom'
+Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_short, A_se, function)
+Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse, function)
 
 # Calculate M2 of build-up Fids real
 Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = freq_domain_correction(Time_build_full_se_r, Re_build_full_se, 0, False)
@@ -582,6 +600,21 @@ M2_FID_MSE_r, T2_FID_MSE_r  = calculate_M2(Real_buildupfid_MSE_r, Frequency_buil
 
 print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
 print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
+
+
+function = 'gauss'
+Time_build_full_se_rg, Re_build_full_seg, Re_build_seg = build_up_fid(Time_fid, Re_td_fid_short, A_se, function)
+Time_build_full_mse_rg, Re_build_full_mseg, Re_build_mseg = build_up_fid(Time_fid, Re_td_fid_short, A_mse, function)
+
+# Calculate M2 of build-up Fids real
+Frequency_buildupfid_SE_rg, Real_buildupfid_SE_rg, _      = freq_domain_correction(Time_build_full_se_rg, Re_build_full_seg, 0, False)
+Frequency_buildupfid_MSE_rg, Real_buildupfid_MSE_rg, _    = freq_domain_correction(Time_build_full_mse_rg, Re_build_full_mseg, 0, True)
+
+M2_FID_SE_rg, T2_FID_SE_rg    = calculate_M2(Real_buildupfid_SE_rg, Frequency_buildupfid_SE_rg)
+M2_FID_MSE_rg, T2_FID_MSE_rg  = calculate_M2(Real_buildupfid_MSE_rg, Frequency_buildupfid_MSE_rg)
+
+print(f'FID build-up with real SE:\nM2: {M2_FID_SE_rg}\nT2: {T2_FID_SE_rg}')
+print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_rg}\nT2: {T2_FID_MSE_rg}')
 
 # PLOT all figures here
 
@@ -609,12 +642,12 @@ print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
 
 
 ## Build-up decys and spectra
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))
 ax1.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
 ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
 ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
 ax1.set_xlim(-5, 80)
-ax1.set_title('a) NMR Signal', loc='left')
+ax1.set_title('a) NMR Signal polynom', loc='left')
 ax1.set_xlabel('Time, μs')
 ax1.set_ylabel('Amplitude, a.u.')
 ax1.legend()
@@ -624,10 +657,29 @@ ax2.plot(Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, 'k', label='MSE')
 ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
 ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
 ax2.set_xlim(-0.3,0.3)
-ax2.set_title('b) FFT spectra', loc='left')
+ax2.set_title('b) FFT spectra ploynom', loc='left')
 ax2.set_xlabel('Frequency, MHz')
 ax2.set_ylabel('Intensity, a.u.')
 ax2.legend()
+
+ax3.plot(Time_build_full_mse_rg, Re_build_full_mseg, 'k', label='FID from MSE')
+ax3.plot(Time_build_full_se_rg, Re_build_full_seg, 'b', label='FID from SE')
+ax3.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
+ax3.set_xlim(-5, 80)
+ax3.set_title('c) NMR Signal gauss', loc='left')
+ax3.set_xlabel('Time, μs')
+ax3.set_ylabel('Amplitude, a.u.')
+ax3.legend()
+
+
+ax4.plot(Frequency_buildupfid_MSE_rg, Real_buildupfid_MSE_rg, 'k', label='MSE')
+ax4.plot(Frequency_buildupfid_SE_rg, Real_buildupfid_SE_rg, 'b', label='SE')
+ax4.plot(Fr_FID, Re_FID, 'r', label='FID')
+ax4.set_xlim(-0.3,0.3)
+ax4.set_title('d) FFT spectra gauss', loc='left')
+ax4.set_xlabel('Frequency, MHz')
+ax4.set_ylabel('Intensity, a.u.')
+ax4.legend()
 
 plt.tight_layout()
 plt.show()
