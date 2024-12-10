@@ -6,7 +6,8 @@ from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import os, re
-
+from scipy.interpolate import griddata
+from matplotlib import cm
 
 # Find nearest value in array
 def find_nearest(array, value):
@@ -357,12 +358,12 @@ def analysis_SE(measurement_files, baseline, filename1, filename2, type, type_sa
 
 # Directory and pattern setup
 parent_directory = os.path.join(os.getcwd(), 'SE_Cycle')
+
 pattern = re.compile(r'Cellulose.*.dat$')
 pattern2 = re.compile(r'Empty.*.dat$')
 pattern3 = re.compile(r'Cellulose.*_\s*(\d+)_c\.dat')
 pattern_FID = re.compile(r'FID_C.*.dat$')
 pattern_FID_empty = re.compile(r'FID_Empty.*.dat$')
-pattern_FID_water = re.compile(r'FID_Water.*.dat$')
 pattern_MSE = re.compile(r'MSE.*.dat$')
 
 measurement_files = {}
@@ -399,17 +400,6 @@ for filename in os.listdir(parent_directory):
     elif pattern_FID_empty.match(filename):
         correction = False
         Time_fid_empty, Re_td_fid_empty, Im_td_fid_empty, Amp_td_fid_empty = time_domain_correction(parent_directory, filename, correction)
-    
-    # Water
-    elif pattern_FID_water.match(filename):
-        correction = True
-        Time_water, Re_td_water, Im_td_water, Amp_td_water = time_domain_correction(parent_directory, filename, correction)
-        # UNFORTUNATELY I recorded a very long FID for water, my bad
-        length_to_cut = len(Time_fid)
-        Time_water      = Time_water[:length_to_cut]
-        Re_td_water     = Re_td_water[:length_to_cut]
-        Im_td_water     = Im_td_water[:length_to_cut]
-        Amp_td_water    = Amp_td_water[:length_to_cut]
 
     # SE
     elif pattern.match(filename):
@@ -422,8 +412,7 @@ for filename in os.listdir(parent_directory):
         Time, Re, Im, Amp = time_domain_correction(parent_directory, filename, correction)
         baseline[filename] = {'Time': Time, 'Amp': Amp, 'Re': Re, 'Im': Im}
 
-# Water
-Re_td_water_sub    = Re_td_water - Re_td_fid_empty
+
 
 # Set names for empty and RE from SE 
 filename_for_plot_se = 'Cellulose_500scnas_12gain_ 9_c.dat'
@@ -455,13 +444,6 @@ Fr_FID, Re_FID,_ = freq_domain_correction(Time_fid, Re_td_fid_short, 0, False)
 Fr_MSE, Re_MSE,_ = freq_domain_correction(Time_mse, Re_td_mse_short , 0, False)
 Fr_SE, Re_SE,_ = freq_domain_correction(Time_se, Re_td_se_short, 0, False)
 
-# 10. M2 & T2
-M2_FID, T2_FID = calculate_M2(Re_FID, Fr_FID)
-print(f'FID\nM2: {M2_FID}\nT2: {T2_FID}')
-M2_FID, T2_FID = calculate_M2(Re_SE, Fr_SE)
-print(f'SE\nM2: {M2_FID}\nT2: {T2_FID}')
-M2_FID, T2_FID = calculate_M2(Re_MSE, Fr_MSE)
-print(f'MSE\nM2: {M2_FID}\nT2: {T2_FID}')
 
 #### SE part
 # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 7))
@@ -507,13 +489,11 @@ extrapolation = fitting_line[0]
 # plt.show()
 
 
-def build_up_fid(Time, Data, A, function):
+def build_up_fid(Time, Data, A, function, start, finish):
 
     if function == 'polynom':
         # Normalize FID to the amplitude A
         # 1. Cut the FID between 10 and 18 microsec
-        start = 7
-        finish = 20
 
         Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
         Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
@@ -535,8 +515,6 @@ def build_up_fid(Time, Data, A, function):
     elif function == 'gauss':
         # Normalize FID to the amplitude A
         # 1. Cut the FID between 10 and 18 microsec
-        start = 7
-        finish = 18
 
         Time_cut    = Time[find_nearest(Time, start):find_nearest(Time, finish)]
         Data_cut    = Data[find_nearest(Time, start):find_nearest(Time, finish)]
@@ -576,9 +554,9 @@ def build_up_fid(Time, Data, A, function):
     Time_build_full = np.concatenate((Time_build_from_zero,Time_build_middle, Time_build_end))
     Data_build_full  = np.concatenate((Data_build_from_zero,Data_build_middle, Data_build_end))
 
-    plt.plot(Time_cut, Data_built1, 'b')
-    plt.plot(Time, Data, 'r--')
-    plt.show()
+    # plt.plot(Time_cut, Data_built1, 'b')
+    # plt.plot(Time, Data, 'r--')
+    # plt.show()
 
     return Time_build_full, Data_build_full, Data_built
 
@@ -587,33 +565,61 @@ A_se = extrapolation
 A_mse = np.max(Re_td_mse_norm)
 
 function = 'polynom'
-Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_short, A_se, function)
-Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse, function)
 
-# Calculate M2 of build-up Fids real
-Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = freq_domain_correction(Time_build_full_se_r, Re_build_full_se, 0, False)
-Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, _    = freq_domain_correction(Time_build_full_mse_r, Re_build_full_mse, 0, True)
+M2 = []
+T2 = []
 
-M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
-M2_FID_MSE_r, T2_FID_MSE_r  = calculate_M2(Real_buildupfid_MSE_r, Frequency_buildupfid_MSE_r)
+start_range = np.arange(9, 14, 0.5)
+finish_range = np.arange(19, 24, 0.5)
 
-print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
-print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
+for start in start_range:
+    for finish in finish_range:
+        Time_build_full_se_r, Re_build_full_se, Re_build_se = build_up_fid(Time_fid, Re_td_fid_short, A_se, function, start, finish)
+        # Time_build_full_mse_r, Re_build_full_mse, Re_build_mse = build_up_fid(Time_fid, Re_td_fid_short, A_mse, function, start, finish)
+
+        # Calculate M2 of build-up Fids real
+        Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, _      = freq_domain_correction(Time_build_full_se_r, Re_build_full_se, 0, False)
+        # Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, _    = freq_domain_correction(Time_build_full_mse_r, Re_build_full_mse, 0, True)
+
+        M2_FID_SE_r, T2_FID_SE_r    = calculate_M2(Real_buildupfid_SE_r, Frequency_buildupfid_SE_r)
+        # M2_FID_MSE_r, T2_FID_MSE_r  = calculate_M2(Real_buildupfid_MSE_r, Frequency_buildupfid_MSE_r)
+
+        # print(f'FID build-up with real SE:\nM2: {M2_FID_SE_r}\nT2: {T2_FID_SE_r}')
+        # print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_r}\nT2: {T2_FID_MSE_r}')
+        M2.append(M2_FID_SE_r)
+        T2.append(T2_FID_SE_r)
 
 
-function = 'gauss'
-Time_build_full_se_rg, Re_build_full_seg, Re_build_seg = build_up_fid(Time_fid, Re_td_fid_short, A_se, function)
-Time_build_full_mse_rg, Re_build_full_mseg, Re_build_mseg = build_up_fid(Time_fid, Re_td_fid_short, A_mse, function)
 
-# Calculate M2 of build-up Fids real
-Frequency_buildupfid_SE_rg, Real_buildupfid_SE_rg, _      = freq_domain_correction(Time_build_full_se_rg, Re_build_full_seg, 0, False)
-Frequency_buildupfid_MSE_rg, Real_buildupfid_MSE_rg, _    = freq_domain_correction(Time_build_full_mse_rg, Re_build_full_mseg, 0, True)
+Value = np.array(T2).reshape(len(start_range), len(finish_range))
 
-M2_FID_SE_rg, T2_FID_SE_rg    = calculate_M2(Real_buildupfid_SE_rg, Frequency_buildupfid_SE_rg)
-M2_FID_MSE_rg, T2_FID_MSE_rg  = calculate_M2(Real_buildupfid_MSE_rg, Frequency_buildupfid_MSE_rg)
+# Создание сетки значений для осей
+start_range = np.array(start_range)
+finish_range = np.array(finish_range)
 
-print(f'FID build-up with real SE:\nM2: {M2_FID_SE_rg}\nT2: {T2_FID_SE_rg}')
-print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_rg}\nT2: {T2_FID_MSE_rg}')
+# Визуализация
+plt.figure(figsize=(8, 6))
+plt.pcolormesh(finish_range, start_range, Value, shading='auto', cmap='RdYlGn')  # Зеленый->Красный
+plt.colorbar(label='T2 Value')  # Добавить цветовую шкалу
+plt.xlabel('Finish Range')
+plt.ylabel('Start Range')
+plt.title('2D Visualization of M2')
+plt.show()
+
+
+# function = 'gauss'
+# Time_build_full_se_rg, Re_build_full_seg, Re_build_seg = build_up_fid(Time_fid, Re_td_fid_short, A_se, function, start, finish)
+# Time_build_full_mse_rg, Re_build_full_mseg, Re_build_mseg = build_up_fid(Time_fid, Re_td_fid_short, A_mse, function, start, finish)
+
+# # Calculate M2 of build-up Fids real
+# Frequency_buildupfid_SE_rg, Real_buildupfid_SE_rg, _      = freq_domain_correction(Time_build_full_se_rg, Re_build_full_seg, 0, False)
+# Frequency_buildupfid_MSE_rg, Real_buildupfid_MSE_rg, _    = freq_domain_correction(Time_build_full_mse_rg, Re_build_full_mseg, 0, True)
+
+# M2_FID_SE_rg, T2_FID_SE_rg    = calculate_M2(Real_buildupfid_SE_rg, Frequency_buildupfid_SE_rg)
+# M2_FID_MSE_rg, T2_FID_MSE_rg  = calculate_M2(Real_buildupfid_MSE_rg, Frequency_buildupfid_MSE_rg)
+
+# print(f'FID build-up with real SE:\nM2: {M2_FID_SE_rg}\nT2: {T2_FID_SE_rg}')
+# print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_rg}\nT2: {T2_FID_MSE_rg}')
 
 # PLOT all figures here
 
@@ -640,111 +646,56 @@ print(f'FID build-up with real MSE:\nM2: {M2_FID_MSE_rg}\nT2: {T2_FID_MSE_rg}')
 # plt.show()
 
 
-## Build-up decys and spectra
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))
-ax1.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
-ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
-ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
-ax1.set_xlim(-5, 80)
-ax1.set_title('a) NMR Signal polynom', loc='left')
-ax1.set_xlabel('Time, μs')
-ax1.set_ylabel('Amplitude, a.u.')
-ax1.legend()
+# ## Build-up decys and spectra
+# fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(10, 5))
+# ax1.plot(Time_build_full_mse_r, Re_build_full_mse, 'k', label='FID from MSE')
+# ax1.plot(Time_build_full_se_r, Re_build_full_se, 'b', label='FID from SE')
+# ax1.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
+# ax1.set_xlim(-5, 80)
+# ax1.set_title('a) NMR Signal polynom', loc='left')
+# ax1.set_xlabel('Time, μs')
+# ax1.set_ylabel('Amplitude, a.u.')
+# ax1.legend()
 
 
-ax2.plot(Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, 'k', label='MSE')
-ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
-ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
-ax2.set_xlim(-0.3,0.3)
-ax2.set_title('b) FFT spectra ploynom', loc='left')
-ax2.set_xlabel('Frequency, MHz')
-ax2.set_ylabel('Intensity, a.u.')
-ax2.legend()
+# ax2.plot(Frequency_buildupfid_MSE_r, Real_buildupfid_MSE_r, 'k', label='MSE')
+# ax2.plot(Frequency_buildupfid_SE_r, Real_buildupfid_SE_r, 'b', label='SE')
+# ax2.plot(Fr_FID, Re_FID, 'r', label='FID')
+# ax2.set_xlim(-0.3,0.3)
+# ax2.set_title('b) FFT spectra ploynom', loc='left')
+# ax2.set_xlabel('Frequency, MHz')
+# ax2.set_ylabel('Intensity, a.u.')
+# ax2.legend()
 
-ax3.plot(Time_build_full_mse_rg, Re_build_full_mseg, 'k', label='FID from MSE')
-ax3.plot(Time_build_full_se_rg, Re_build_full_seg, 'b', label='FID from SE')
-ax3.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
-ax3.set_xlim(-5, 80)
-ax3.set_title('c) NMR Signal gauss', loc='left')
-ax3.set_xlabel('Time, μs')
-ax3.set_ylabel('Amplitude, a.u.')
-ax3.legend()
-
-
-ax4.plot(Frequency_buildupfid_MSE_rg, Real_buildupfid_MSE_rg, 'k', label='MSE')
-ax4.plot(Frequency_buildupfid_SE_rg, Real_buildupfid_SE_rg, 'b', label='SE')
-ax4.plot(Fr_FID, Re_FID, 'r', label='FID')
-ax4.set_xlim(-0.3,0.3)
-ax4.set_title('d) FFT spectra gauss', loc='left')
-ax4.set_xlabel('Frequency, MHz')
-ax4.set_ylabel('Intensity, a.u.')
-ax4.legend()
-
-plt.tight_layout()
-plt.show()
+# ax3.plot(Time_build_full_mse_rg, Re_build_full_mseg, 'k', label='FID from MSE')
+# ax3.plot(Time_build_full_se_rg, Re_build_full_seg, 'b', label='FID from SE')
+# ax3.plot(Time_fid, Re_td_fid_short, 'r', label='FID original')
+# ax3.set_xlim(-5, 80)
+# ax3.set_title('c) NMR Signal gauss', loc='left')
+# ax3.set_xlabel('Time, μs')
+# ax3.set_ylabel('Amplitude, a.u.')
+# ax3.legend()
 
 
-## Save build-up data for export
-df = pd.DataFrame({'Time' : Time_build_full_mse_r, 'Re': Re_build_full_mse})
-df.to_csv("MSE_build_up.dat", sep ='\t', index = 'none')
+# ax4.plot(Frequency_buildupfid_MSE_rg, Real_buildupfid_MSE_rg, 'k', label='MSE')
+# ax4.plot(Frequency_buildupfid_SE_rg, Real_buildupfid_SE_rg, 'b', label='SE')
+# ax4.plot(Fr_FID, Re_FID, 'r', label='FID')
+# ax4.set_xlim(-0.3,0.3)
+# ax4.set_title('d) FFT spectra gauss', loc='left')
+# ax4.set_xlabel('Frequency, MHz')
+# ax4.set_ylabel('Intensity, a.u.')
+# ax4.legend()
 
-df = pd.DataFrame({'Time' : Time_build_full_se_r, 'Re': Re_build_full_se})
-df.to_csv("SE_build_up.dat", sep ='\t', index = 'none')
-
-
-
-# ## Difference FID and SE real components
-
-# # Setting time arrays to be the same length
-# Time_to_start_from = Time_se[find_nearest(Time_fid[0], Time_se):]
-# Time_to_finish_at = Time_fid[:find_nearest(Time_se[-1], Time_fid)+1]
-
-# # Setting Re of FID and SE to be the same length
-# # I need to cut the beginning of SE and the end of FID
-# SE_re_difference = Re_td_se_short[find_nearest(Time_fid[0], Time_se):]
-# FID_re_difference = Re_td_fid_short[:find_nearest(Time_se[-1], Time_fid)+1]
-# Difference = FID_re_difference - SE_re_difference
-
-
-# plt.plot(Time_to_start_from, Difference)
-# plt.show()
-
-# # Water
-# water_cut_1 = find_nearest(Time_w, 10)
-# water_cut_2 = find_nearest(Time_w, 30)
-# Time_water_cut = Time_w[water_cut_1:water_cut_2]
-# Amp_water_cut = Amp_w[water_cut_1:water_cut_2]
-# Amp_water = np.mean(Amp_water_cut)
-# Amp_cellu = popt1[0]
-
-# plt.plot(Time_build_full, Amp_build_full, 'r', label='FID Built')
-# plt.plot(Time_w, Amp_w, 'b', label='FID water')
-# plt.plot(Time_water_cut, Amp_water_cut, 'c--', label='Mean')
-# plt.xlabel('Time, μs')
-# plt.ylabel('Amplitude, a.u.')
-# plt.legend()
 # plt.tight_layout()
 # plt.show()
 
-# # Constants
-# mass_water = 0.0963
-# mass_cellu = 0.1334
-# Avogadro_number= 6.022*(10**23)
-# molar_mass_water = 18.01528
-# molar_mass_cellu = 162.1406
 
-# protons_water = (mass_water/molar_mass_water)*Avogadro_number*2
-# protons_cellu = (mass_cellu/molar_mass_cellu)*Avogadro_number*10
+# ## Save build-up data for export
+# df = pd.DataFrame({'Time' : Time_build_full_mse_r, 'Re': Re_build_full_mse})
+# df.to_csv("MSE_build_up.dat", sep ='\t', index = 'none')
 
-# proton_density_water = Amp_water/protons_water
-# proton_density_cellu = Amp_cellu/protons_cellu
+# df = pd.DataFrame({'Time' : Time_build_full_se_r, 'Re': Re_build_full_se})
+# df.to_csv("SE_build_up.dat", sep ='\t', index = 'none')
 
-# Amp_cellu_from_protondensity_water = proton_density_water*protons_cellu
 
-# # Print results
-# print(f'The amplitude of cellulose calculated from water is {Amp_cellu_from_protondensity_water}')
 
-# print(f'Maximum amplitude from SE: {popt1[0]}')
-# print(f'Maximum amplitude from MSE: {np.max(Amp_MSE)}')
-# print(f'Maximum amplitude from FID: {popt[0]}')
-print('done')
