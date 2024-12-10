@@ -4,6 +4,7 @@ import pandas as pd
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 import os, re
 
 
